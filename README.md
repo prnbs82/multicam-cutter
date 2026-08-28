@@ -116,15 +116,18 @@ everything streams; the 💻 badge shows what fits.
 
 Only two features use a chat model: naming topics and suggesting where an image would help. Without
 one, topics get keyword names and image moments come from concrete nouns and proper names in the
-transcript. To add one, open **Advanced → Images tab → 🤖 AI assistant**:
+transcript. The **🤖 AI** button in the Images tab shows which assistant is active and opens the settings:
 
+- **Grok (xAI)** — choose it, paste an API key from https://console.x.ai, **Save**, then **Test**
+  (the reply — or xAI's exact error — is shown). Default model `grok-4-fast`; change it if xAI renames models.
 - **Claude CLI** — detected automatically if `claude` is installed.
-- **Anthropic API key**.
-- **OpenAI-compatible** — xAI **Grok** (`https://api.x.ai/v1`), OpenAI, or a local **Ollama**
-  (`http://localhost:11434/v1`); presets fill in the URL and model.
+- **Claude (Anthropic API key)**.
+- **Other OpenAI-compatible** — OpenAI, or a local **Ollama** (`http://localhost:11434/v1`, no key);
+  presets fill in the URL and model.
 
+From the terminal: `python multicam.py ai --provider xai --key xai-…` then `python multicam.py ai --test`.
 Keys are stored in `~/.config/multicam/ai.json` on your computer only. Environment variables
-`ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY` are also picked up.
+`XAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` are also picked up.
 
 ## Images and copyright
 

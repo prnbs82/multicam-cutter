@@ -12,6 +12,8 @@ SNAP_BACK, SNAP_FWD = 0.20, 0.10     # left edge searches [a-0.20, a+0.10]; righ
 
 
 def build(wd):
+    """Compute _multicam/envelope.u8 from the master wav (RMS per 10 ms hop -> dBFS -> u8 = 2*dBFS + 240) and return its path.
+    Cached: only rebuilt when the wav is newer than the existing file."""
     path = os.path.join(wd, 'envelope.u8')
     proj = load_json(os.path.join(wd, 'project.json'))
     wav8 = os.path.join(wd, 'wav', proj['master_audio']['name'] + '.wav')
@@ -31,6 +33,7 @@ def build(wd):
 
 
 def load(wd):
+    """Load the envelope as a uint8 array (one value per 10 ms hop), building it first when needed; None when there is no wav yet."""
     path = build(wd) if os.path.exists(os.path.join(wd, 'wav')) else None
     if not path or not os.path.exists(path):
         return None
@@ -182,6 +185,8 @@ def word_edges_v3(words, a, b, u8):
 
 
 def snap_removals_v3(removals, u8, words):
+    """Apply the natural-cut rule (word_edges_v3) to word/filler/pause-fixed removals, storing the kept silence as r['kept'] = [before, after].
+    Pause removals, removals that would shrink below 50 ms, and everything without envelope or words pass through unchanged."""
     out = []
     for r in removals:
         if r.get('kind') in ('words', 'filler', 'pause-fixed') and words and u8 is not None:

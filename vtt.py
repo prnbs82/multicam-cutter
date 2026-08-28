@@ -5,6 +5,7 @@ _TS = re.compile(r'(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})')
 
 
 def parse_ts(s):
+    """Seconds for a WebVTT timestamp '[HH:]MM:SS.mmm' (comma accepted as separator); raises ValueError on a bad string."""
     m = _TS.match(s.strip())
     if not m:
         raise ValueError(f'bad timestamp {s!r}')
@@ -13,6 +14,7 @@ def parse_ts(s):
 
 
 def parse_vtt(path):
+    """Parse a WebVTT file into cues [{start, end, text, speaker}] sorted by start; a leading 'Name:' in the text becomes the speaker."""
     text = open(path, encoding='utf-8-sig').read().replace('\r\n', '\n').replace('\r', '\n')
     cues = []
     for block in re.split(r'\n\s*\n', text):

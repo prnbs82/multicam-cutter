@@ -15,6 +15,7 @@ MIN_GAIN = 0.90      # accept a new pair only if its motion score is < 90 % of t
 
 _pose = None
 def _get_pose():
+    """Lazily create and return the shared MediaPipe Pose detector (static images, lightest model, GLOG quiet)."""
     global _pose
     if _pose is None:
         os.environ.setdefault('GLOG_minloglevel', '2')
@@ -27,12 +28,15 @@ KEY_VERSION = 'k3'   # bump when the search rules change so cached fixes are rec
 SIL_FRAC = 0.25      # a 10 ms hop is 'silent' when its RMS is below this fraction of the median speech RMS
 
 def fix_key(j):
+    """Cache key of a join in joinfix.json: left end, right start (3 decimals), left camera and KEY_VERSION."""
     return f"{j['lb']:.3f}-{j['ra']:.3f}-{j['camL']}-{KEY_VERSION}"
 
 
 class Envelope:
     """10 ms RMS envelope of the master audio (from the 8 kHz sync wav); tells how far the audio is quiet around a time."""
     def __init__(self, wd):
+        """Load the 8 kHz sync wav of the master audio and compute the 10 ms RMS envelope and the silence threshold;
+        self.ok is False (and nothing else is set) when the wav does not exist yet."""
         from scipy.io import wavfile
         proj = load_json(os.path.join(wd, 'project.json'))
         path = os.path.join(wd, 'wav', proj['master_audio']['name'] + '.wav')
@@ -66,10 +70,13 @@ class Envelope:
 
 
 class FrameSource:
+    """Random access to proxy frames (_multicam/proxies/<cam>.mp4) through OpenCV, one VideoCapture per camera, opened lazily."""
     def __init__(self, wd):
+        """Remember the work dir; captures are opened per camera on first use."""
         import cv2
         self.cv2, self.wd, self.caps = cv2, wd, {}
     def frame(self, cam, t):
+        """BGR frame of camera `cam` at time t (seconds on the proxy = master clock), or None when the seek/read fails."""
         cv2 = self.cv2
         cap = self.caps.get(cam)
         if cap is None:
@@ -78,6 +85,7 @@ class FrameSource:
         ok, f = cap.read()
         return f if ok else None
     def close(self):
+        """Release every open VideoCapture."""
         for c in self.caps.values():
             c.release()
 
@@ -191,6 +199,7 @@ def run_posematch(lecture_dir, force=False):
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     def status(**kw):
+        """Write posematch/status.json with the given fields plus a timestamp."""
         save_json(os.path.join(wd, 'posematch', 'status.json'), {**kw, 'time': time.time()})
     try:
         words = load_json(os.path.join(wd, 'words.json'), {'words': []})['words']

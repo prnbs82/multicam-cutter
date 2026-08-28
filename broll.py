@@ -15,6 +15,7 @@ KEYWORDS = ['vacuum tube', 'vacuum tubes', 'transistor', 'transistors', 'eniac',
 
 
 def _status(wd, **kw):
+    """Write _multicam/broll/status.json with the given fields plus the current time (polled by the UI)."""
     save_json(os.path.join(wd, 'broll', 'status.json'), {**kw, 'time': time.time()})
 
 
@@ -22,10 +23,12 @@ _BLOCKED = {}    # host -> until (epoch): hosts that answered 429 are avoided fo
 
 
 def _host(url):
+    """Lower-case host name of a URL (the key of the rate-limit block list)."""
     return urllib.parse.urlparse(url).netloc.lower()
 
 
 def host_blocked(url):
+    """True while the URL's host is on the 429 block list (10 minutes after a rate-limit answer)."""
     return _BLOCKED.get(_host(url), 0) > time.time()
 
 
@@ -54,6 +57,7 @@ def _get(url, timeout=25, tries=2):
 
 
 def _api(url):
+    """GET a JSON API URL through _get and return the decoded object."""
     return json.loads(_get(url).decode('utf-8', 'replace'))
 
 
@@ -132,6 +136,8 @@ def suggest_moments(words, a, b, use_llm=True):
 
 # ------------------------------------------------------------------ 2. images
 def _commons_fileinfo(file_title):
+    """Wikimedia Commons imageinfo for a 'File:...' title: MAX_W thumbnail and original URLs, description page, artist and licence
+    (HTML stripped from extmetadata). None when the API returns no image info."""
     q = urllib.parse.quote(file_title)
     d = _api(f'https://commons.wikimedia.org/w/api.php?action=query&titles={q}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth={MAX_W}&format=json')
     for p in d.get('query', {}).get('pages', {}).values():
@@ -146,6 +152,7 @@ def _commons_fileinfo(file_title):
 
 
 def wikipedia_candidates(query, n=3):
+    """Up to n English Wikipedia search hits that have a lead image, each resolved through Commons into a candidate dict with credit; [] on failure."""
     out = []
     try:
         d = _api('https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=' + urllib.parse.quote(query) + f'&gsrlimit={n}&prop=pageimages|pageprops|info&inprop=url&piprop=original|name&format=json')
@@ -168,6 +175,7 @@ def wikipedia_candidates(query, n=3):
 
 
 def commons_candidates(query, n=4):
+    """Up to n bitmap files from a Wikimedia Commons full-text search as candidate dicts (MAX_W thumbnail, licence, artist, credit); [] on failure."""
     out = []
     try:
         d = _api('https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=' + urllib.parse.quote(query + ' filetype:bitmap') + f'&gsrnamespace=6&gsrlimit={n}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth={MAX_W}&format=json')
@@ -186,6 +194,7 @@ def commons_candidates(query, n=4):
 
 
 def openverse_candidates(query, n=4):
+    """Up to n commercially usable images from the Openverse API as candidate dicts (licence spelled like 'CC BY-SA 4.0'); [] on failure."""
     out = []
     try:
         d = _api('https://api.openverse.org/v1/images/?q=' + urllib.parse.quote(query) + f'&license_type=commercial&page_size={n}')
@@ -243,6 +252,7 @@ def unsplash_track_download(wd, cand):
 
 
 def _credit(title, artist, license, via):
+    """One-line credit 'title · artist · licence (via)'; public-domain licences are omitted and the part before '(via)' is cut at 110 chars."""
     parts = [title.strip()] if title else []
     if artist:
         parts.append(artist.strip())
@@ -321,6 +331,9 @@ def download(wd, cand):
 
 # ------------------------------------------------------------------ 3. per-clip job
 def run_suggest(lecture_dir, clip_id, use_llm=True, offline=False):
+    """B-roll job for one clip: find image-ready moments, carry over status/candidates/pick/duration of previous items at the same time,
+    search and download one picture per moment (4 threads), save _multicam/broll/suggest_<clipId>.json and report progress in
+    broll/status.json. offline=True skips the LLM and the network and uses generated placeholder images. Returns the saved doc."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     from transcribe import load_words, words_in
@@ -348,6 +361,7 @@ def run_suggest(lecture_dir, clip_id, use_llm=True, offline=False):
         _status(wd, state='searching', progress=0.3, message=f'{len(items)} moments — looking for pictures', clipId=clip_id)
         done = [0]
         def work(it):
+            """Per-item worker: search candidates (or make a placeholder), download the first fetchable one, report progress."""
             if not it['candidates']:
                 if offline:
                     it['candidates'] = [{'provider': 'placeholder', 'title': it['query'], 'src_url': 'placeholder://' + it['query'], 'source_url': '', 'license': 'own', 'artist': '', 'credit': ''}]
@@ -368,7 +382,7 @@ def run_suggest(lecture_dir, clip_id, use_llm=True, offline=False):
         with ThreadPoolExecutor(4) as ex:
             list(ex.map(work, items))
         doc = {'clipId': clip_id, 'a': clip['a'], 'b': clip['b'], 'name': clip['name'], 'created': time.time(), 'items': items,
-               'llm': any(i.get('source') in ('claude', 'llm') for i in items)}
+               'llm': any(i.get('source') in ('claude', 'grok', 'llm') for i in items)}
         save_json(out_path, doc)
         with_img = sum(1 for i in items if i['candidates'])
         _status(wd, state='done', progress=1, message=f'{len(items)} suggestions, {with_img} with an image', clipId=clip_id)
@@ -380,6 +394,7 @@ def run_suggest(lecture_dir, clip_id, use_llm=True, offline=False):
 
 
 def _placeholder(wd, text):
+    """Write a 1280x720 dark-blue JPEG showing `text` into _multicam/broll (offline mode) and return its file name."""
     from PIL import Image, ImageDraw
     h = hashlib.sha1(('placeholder' + text).encode()).hexdigest()[:12]
     d = os.path.join(wd, 'broll'); os.makedirs(d, exist_ok=True)
@@ -390,6 +405,8 @@ def _placeholder(wd, text):
 
 
 def next_candidate(lecture_dir, clip_id, item_id):
+    """Move an item's pick to the next downloadable candidate (first topping the list up from Openverse when it has fewer than 6),
+    save the doc and return the item. Raises when no candidate can be fetched right now (rate-limited hosts are skipped)."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     path = os.path.join(wd, 'broll', f'suggest_{clip_id}.json')
@@ -425,6 +442,8 @@ def next_candidate(lecture_dir, clip_id, item_id):
 
 
 def set_status(lecture_dir, clip_id, item_id, status, duration=None):
+    """Set an item's status (e.g. 'used') and optionally its duration, then save the doc and return the item. The first time an
+    Unsplash photo becomes 'used' its download is reported to Unsplash, as the API terms require."""
     wd = work_dir(os.path.abspath(lecture_dir))
     path = os.path.join(wd, 'broll', f'suggest_{clip_id}.json')
     doc = load_json(path, {})

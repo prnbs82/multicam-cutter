@@ -13,6 +13,7 @@ MIN_WARP_GAIN = 0.35      # the warp must cut the photometric error in the movin
 
 
 def _flow(a_gray, b_gray):
+    """Dense DIS optical flow (medium preset, spatial propagation) from a_gray to b_gray; returns an HxWx2 float32 field in pixels."""
     import cv2
     dis = cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_MEDIUM)
     dis.setUseSpatialPropagation(True)

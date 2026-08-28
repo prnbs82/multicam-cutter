@@ -22,10 +22,12 @@ NAMES = {k: n for k, n, _ in ENCODERS}
 
 # ------------------------------------------------------------------ config files
 def config_path(name):
+    """Absolute path of `name` inside CONFIG_DIR (~/.config/multicam or $MULTICAM_CONFIG)."""
     return os.path.join(CONFIG_DIR, name)
 
 
 def load_config(name, default=None):
+    """Read a JSON file from CONFIG_DIR; returns `default` when it is missing or not valid JSON."""
     try:
         with open(config_path(name), encoding='utf-8') as f:
             return json.load(f)
@@ -34,6 +36,7 @@ def load_config(name, default=None):
 
 
 def save_config(name, data):
+    """Write `data` as indented JSON to CONFIG_DIR/name atomically (pid-named temp file + os.replace); creates CONFIG_DIR."""
     os.makedirs(CONFIG_DIR, exist_ok=True)
     tmp = config_path(name) + f'.{os.getpid()}.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
@@ -43,6 +46,7 @@ def save_config(name, data):
 
 # ------------------------------------------------------------------ encoder argument sets
 def _vaapi_device():
+    """First /dev/dri/renderD* node (for VA-API), or None when there is no render node."""
     for d in sorted(os.listdir('/dev/dri')) if os.path.isdir('/dev/dri') else []:
         if d.startswith('renderD'):
             return '/dev/dri/' + d
@@ -109,6 +113,7 @@ def prove_encoder(kind, seconds=0.5, size='1920x1080', fps=30):
 
 # ------------------------------------------------------------------ system facts
 def ffmpeg_version():
+    """Version token of the installed ffmpeg (third word of the first `ffmpeg -version` line), or None when it cannot be run."""
     try:
         return subprocess.run(['ffmpeg', '-version'], capture_output=True, text=True, timeout=10).stdout.splitlines()[0].split()[2]
     except Exception:
@@ -116,6 +121,7 @@ def ffmpeg_version():
 
 
 def ffmpeg_encoders():
+    """Set of video encoder names listed by `ffmpeg -encoders` (lines flagged ' V'); empty set when ffmpeg fails."""
     try:
         out = subprocess.run(['ffmpeg', '-hide_banner', '-encoders'], capture_output=True, text=True, timeout=10).stdout
     except Exception:
@@ -143,6 +149,7 @@ OPTIONAL_FILTERS = {'drawtext': 'image credits burned into the picture (needs an
 
 
 def nvidia_gpus():
+    """[{name, vram_gb}] per GPU reported by nvidia-smi; [] when nvidia-smi is absent or fails."""
     if not shutil.which('nvidia-smi'):
         return []
     try:
@@ -185,6 +192,7 @@ def cuda_devices():
 
 
 def torch_device():
+    """'cuda', 'mps' or 'cpu' for torch (MiniLM embeddings); 'cpu' when torch is not installed."""
     try:
         import torch
         if torch.cuda.is_available():
@@ -197,6 +205,7 @@ def torch_device():
 
 
 def physical_cores():
+    """Number of physical CPU cores via psutil, falling back to os.cpu_count() and finally 4."""
     try:
         import psutil
         return psutil.cpu_count(logical=False) or os.cpu_count() or 4
@@ -205,6 +214,7 @@ def physical_cores():
 
 
 def ram_total_gb():
+    """Total RAM in GiB via psutil; assumes 8.0 when psutil is unavailable."""
     try:
         import psutil
         return psutil.virtual_memory().total / 1024 ** 3
@@ -226,6 +236,8 @@ def whisper_choice(model=None):
 
 # ------------------------------------------------------------------ the probe (cached)
 def _signature():
+    """Machine fingerprint that invalidates the hw.json probe cache: policy version, ffmpeg/Python versions, OS, GPUs and the
+    encoders this ffmpeg lists."""
     return {'policy': 2, 'ffmpeg': ffmpeg_version(), 'python': sys.version.split()[0], 'system': platform.system(), 'machine': platform.machine(),
             'gpus': gpu_names(), 'encoders_listed': sorted(e for e in ffmpeg_encoders() if e in NAMES)}
 
@@ -279,6 +291,7 @@ def encoder(quality='final', fps=30):
 
 
 def set_encoder(choice):
+    """Store the user's encoder choice in hw.json ('auto' unless `choice` is a known kind); returns the updated cache."""
     cache = probe()
     cache['encoder'] = choice if choice in NAMES else 'auto'
     save_config('hw.json', cache)
@@ -287,6 +300,8 @@ def set_encoder(choice):
 
 # ------------------------------------------------------------------ report / doctor
 def report(refresh=False):
+    """Dict of system, CPU/RAM, GPU, encoder (used/choice/best/proofs) and Whisper facts for `doctor` and the Advanced panel.
+    Runs the (cached) encoder probe; refresh=True re-proves the encoders."""
     cache = probe(refresh)
     dev, ctype, model = whisper_choice()
     kind = encoder()[0]
@@ -302,6 +317,7 @@ def report(refresh=False):
 
 
 def missing_python_modules():
+    """[{module, package, needed_for}] for every optional Python dependency that fails to import."""
     out = []
     for mod, pkg, what in (('numpy', 'numpy', 'everything'), ('scipy', 'scipy', 'audio sync'), ('psutil', 'psutil', 'capacity report'),
                            ('faster_whisper', 'faster-whisper', 'transcripts'), ('mediapipe', 'mediapipe', 'gaze proposals + pose matching'),

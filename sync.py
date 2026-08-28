@@ -10,6 +10,7 @@ POSITIONS = (0.1, 0.5, 0.9)
 
 
 def extract_wav(src, dst):
+    """Extract the first audio stream of src to a mono 8 kHz 16-bit wav at dst; skipped when dst is newer than src and > 1000 bytes."""
     if os.path.exists(dst) and os.path.getmtime(dst) > os.path.getmtime(src) and os.path.getsize(dst) > 1000:
         return
     os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -21,6 +22,7 @@ _SOS = butter(4, [300, 3400], btype='band', fs=SR, output='sos')
 
 
 def load(path):
+    """Read an 8 kHz wav (asserts SR) as float32 in [-1, 1], band-passed to 300-3400 Hz (speech band, zero-phase)."""
     sr, x = wavfile.read(path)
     assert sr == SR
     x = x.astype(np.float32) / 32768.0
@@ -29,6 +31,7 @@ def load(path):
 
 
 def norm(x):
+    """Zero-mean, unit-variance copy of x (only centred when x is constant)."""
     x = x - x.mean()
     s = x.std()
     return x / s if s > 0 else x
@@ -46,6 +49,8 @@ def best_lag(master, chunk):
 
 
 def pick_chunks(x):
+    """Up to three CHUNK-second probe windows around 10/50/90 % of x, each pushed forward in 30 s steps (max 6) while nearly silent;
+    returns [(start_sample, samples)]. A file shorter than CHUNK is returned whole."""
     n = len(x)
     L = int(CHUNK * SR)
     if n <= L:
@@ -65,6 +70,10 @@ def pick_chunks(x):
 
 
 def sync_project(lecture_dir, force=False):
+    """Cross-correlate every angle file against the master audio and write _multicam/sync.json
+    {master, files: {name: {offset, drift_ppm, spread, confidence, chunks, mtime}}}; returns it.
+    offset = seconds after the master clock at which the file starts (median over chunks, drift from a linear fit); 8 kHz wavs go
+    to _multicam/wav; files are cached by mtime unless force."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     proj = load_json(os.path.join(wd, 'project.json'))

@@ -10,14 +10,17 @@ CHUNK = 600.0       # process long ranges in chunks so progress is meaningful
 
 
 def _status(wd, **kw):
+    """Write transcribe/status.json with the given fields plus a timestamp."""
     save_json(os.path.join(wd, 'transcribe', 'status.json'), {**kw, 'time': time.time()})
 
 
 def load_words(wd):
+    """words.json of the work dir, or an empty document {model: None, ranges: [], words: []}."""
     return load_json(os.path.join(wd, 'words.json'), {'model': None, 'ranges': [], 'words': []})
 
 
 def words_in(doc, a, b):
+    """Words of doc whose start time lies in [a, b)."""
     return [w for w in doc['words'] if a <= w['s'] < b]
 
 
@@ -40,6 +43,7 @@ def coverage_missing(ranges, a, b):
 
 
 def merge_range(doc, a, b, words):
+    """Replace the words starting in [a, b) with `words`, keep them sorted, and merge [a, b] into doc['ranges'] (all in place)."""
     doc['words'] = [w for w in doc['words'] if not (a <= w['s'] < b)] + words
     doc['words'].sort(key=lambda w: w['s'])
     rs = sorted(doc['ranges'] + [{'a': a, 'b': b}], key=lambda r: r['a'])
@@ -53,11 +57,16 @@ def merge_range(doc, a, b, words):
 
 
 def extract_wav(master, a, b, dst):
+    """Cut [a, b) of the master audio to a mono 16 kHz 16-bit wav at dst (Whisper input)."""
     run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{a:.3f}', '-t', f'{b - a:.3f}', '-i', master,
          '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', dst])
 
 
 def transcribe_range(lecture_dir, a=None, b=None, model='large-v3', force=False):
+    """Transcribe the not-yet-covered parts of [a, b] of the master audio (whole lecture by default) with faster-whisper and update
+    _multicam/words.json; returns the document. Works in CHUNK-second pieces with MARGIN seconds of context, saving after each;
+    device/model from hw.whisper_choice (falls back to CPU int8 when the GPU fails); force re-does the range; progress in
+    transcribe/status.json."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     proj = load_json(os.path.join(wd, 'project.json'))

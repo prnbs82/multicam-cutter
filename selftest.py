@@ -8,6 +8,7 @@ def make_synthetic(T):
     """Build a tiny fake lecture: 120 s master audio (pink noise + beeps every 7 s), a Zoom-like screen video, camera A
     (+10 s, 100 s long) and camera B in two segments (+20..+50, +60..+90), a VTT transcript; then init + sync + proxy."""
     def ff(*args):
+        """Run ffmpeg quietly inside T, raising on failure."""
         subprocess.run(['ffmpeg', '-v', 'error', '-y', *args], check=True, cwd=T)
     shutil.rmtree(T, ignore_errors=True); os.makedirs(T)
     ff('-f', 'lavfi', '-i', 'anoisesrc=color=pink:seed=7:r=48000:d=120', '-f', 'lavfi', '-i', 'sine=frequency=880:r=48000:d=120',
@@ -39,6 +40,7 @@ for d in ('broll', 'gaze', 'checkpoints', 'posematch', 'transcribe', 'topics', '
 srv = subprocess.Popen([sys.executable, os.path.join(here, 'multicam.py'), 'serve', ld, '--port', str(port)],
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 def req(path, method='GET', body=None, headers={}):
+    """HTTP request to the local server (body JSON-encoded); returns (status, headers dict, body bytes)."""
     r = urllib.request.Request(base + path, method=method, data=(json.dumps(body).encode() if body is not None else None),
                                headers={'Content-Type': 'application/json', **headers})
     with urllib.request.urlopen(r) as resp:
@@ -94,6 +96,7 @@ try:
     # framed block (master 15-45 s = output ~2.5-32.5 s): the output frame must equal the 70% centre-ish crop of the source frame, scaled up
     import numpy as np
     def frame(path, ss, vf):
+        """One frame of `path` at ss seconds through filter vf, as a flat float32 grayscale array."""
         raw = subprocess.run(['ffmpeg', '-v', 'error', '-ss', f'{ss:.3f}', '-i', path, '-frames:v', '1', '-vf', vf, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'], capture_output=True).stdout
         return np.frombuffer(raw, np.uint8).astype(np.float32)
     out_f = frame(out, 20.0 - 12.5 + 0.3, 'scale=192:108')                                          # output at master 20.0 s

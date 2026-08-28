@@ -12,6 +12,7 @@ def group_key(stem):
 
 
 def suggest_name(files):
+    """Human-readable angle name from its file names: the first NAME_HINTS match, else the cleaned file stem (segment digits dropped)."""
     s = ' '.join(files).lower()
     for hint, name in NAME_HINTS:
         if hint in s:
@@ -24,6 +25,7 @@ def suggest_name(files):
 
 
 def slug(name, taken):
+    """Lower-case id for `name` (letters, digits, dashes), made unique against `taken` by appending 2, 3, ..."""
     base = re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') or 'angle'
     s, i = base, 2
     while s in taken:
@@ -32,6 +34,9 @@ def slug(name, taken):
 
 
 def init_project(lecture_dir):
+    """Scan lecture_dir for media, adopt the first unknown audio as master, the first .vtt as transcript, group new videos into
+    angles (segments share a group_key; each file probed with ffprobe) and save _multicam/project.json. Files already in
+    project.json are kept untouched. Returns the project dict."""
     lecture_dir = os.path.abspath(lecture_dir)
     wd = work_dir(lecture_dir)
     ppath = os.path.join(wd, 'project.json')

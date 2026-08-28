@@ -13,15 +13,21 @@
   multicam.py capacity <lecture dir>                   what this machine can handle (RAM/CPU/disk, render speed, clip limits)
   multicam.py doctor [lecture dir] [--refresh]         hardware report: usable encoders, GPU, Whisper device, missing modules, AI provider
   multicam.py setup  <lecture dir>                     init + sync + proxy in one go (what the `multicam` launcher runs on a new folder)
+  multicam.py ai [--provider none|claude-cli|anthropic|xai|openai] [--model M] [--base-url URL] [--key KEY] [--test]
+                                                       choose the optional AI assistant (e.g. `ai --provider xai --key xai-...` for Grok) and test it
 """
 import argparse, sys
 
 
 def main():
+    """Parse the sub-command and dispatch to the module that implements it (imports are lazy so `doctor`/`ai` start fast)."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
     d = sub.add_parser('doctor'); d.add_argument('lecture_dir', nargs='?'); d.add_argument('--refresh', action='store_true', help='re-probe the encoders')
     s = sub.add_parser('setup'); s.add_argument('lecture_dir'); s.add_argument('--workers', type=int, default=0)
+    ai = sub.add_parser('ai'); ai.add_argument('--provider', choices=['auto', 'none', 'claude-cli', 'anthropic', 'xai', 'openai'])
+    ai.add_argument('--model'); ai.add_argument('--base-url'); ai.add_argument('--key', help="API key ('' to forget the stored one)")
+    ai.add_argument('--test', action='store_true', help='send a tiny prompt and show the reply or the error')
     for c in ('init', 'sync', 'proxy', 'serve', 'render', 'transcribe', 'topics', 'posematch', 'gaze', 'broll', 'capacity'):
         p = sub.add_parser(c)
         p.add_argument('lecture_dir')
@@ -59,6 +65,19 @@ def main():
     if a.cmd == 'doctor':
         from hw import doctor
         sys.exit(1 if doctor(a.lecture_dir, refresh=a.refresh) else 0)
+    if a.cmd == 'ai':
+        import llm
+        if a.provider or a.model or a.base_url or a.key is not None:
+            cur = llm.config()
+            llm.save(a.provider or cur.get('provider', 'auto'), a.base_url if a.base_url is not None else cur.get('base_url', ''),
+                     a.model if a.model is not None else cur.get('model', ''), a.key)
+        st = llm.provider_status()
+        print('AI assistant:', st['detail'] + (f" (key {st['key_hint']})" if st['has_key'] and st['provider'] in ('anthropic', 'xai', 'openai') else ''))
+        if a.test:
+            r = llm.test()
+            print('test:', ('OK — reply: ' + r['reply']) if r['ok'] else ('FAILED — ' + r['error']))
+            sys.exit(0 if r['ok'] else 1)
+        return
     if a.cmd == 'setup':
         from project import init_project
         from sync import sync_project

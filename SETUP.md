@@ -80,7 +80,7 @@ None are required. The tool never sends the video or audio anywhere.
 |---|---|---|
 | Wikipedia / Wikimedia Commons / Openverse APIs | free-licence image candidates for B-roll | no key; needs internet during "Suggest images" |
 | Unsplash API | additional photos | access key in Advanced → Images tab, stored in `~/.config/multicam/keys.json` (`unsplash_access_key`) or env `UNSPLASH_ACCESS_KEY` |
-| AI assistant (chat model) | topic names, image-moment suggestions only | `~/.config/multicam/ai.json`: `{"provider": "none|claude-cli|anthropic|openai", "base_url": ..., "model": ..., "api_key": ...}`; env `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `OPENAI_API_KEY` are auto-detected; `claude` CLI on PATH is auto-detected. Without any: keyword labels and noun-phrase moments |
+| AI assistant (chat model) | topic names, image-moment suggestions only | `~/.config/multicam/ai.json`: `{"provider": "none|claude-cli|anthropic|xai|openai", "base_url": ..., "model": ..., "api_key": ...}` (xai = Grok, defaults `https://api.x.ai/v1` / `grok-4-fast`); env `XAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` are auto-detected; `claude` CLI on PATH is auto-detected. CLI: `python multicam.py ai --provider xai --key … --test`. Without any: keyword labels and noun-phrase moments |
 
 OpenAI-compatible endpoints known to work with `provider: openai`: xAI Grok (`https://api.x.ai/v1`),
 OpenAI (`https://api.openai.com/v1`), Ollama (`http://localhost:11434/v1`, no key), LM Studio.

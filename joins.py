@@ -17,6 +17,7 @@ PAUSE_MIN, PAUSE_TARGET = 0.30, 0.45   # natural cut: if the kept silence around
 
 # ------------------------------------------------------------------ pauses
 def settings_of(doc):
+    """Join/pause settings: DEFAULTS overridden by every key of the tighten doc that is not None."""
     s = dict(DEFAULTS)
     for k in DEFAULTS:
         if doc.get(k) is not None:
@@ -25,6 +26,7 @@ def settings_of(doc):
 
 
 def pause_target(words, i, s):
+    """Target pause length (s) after word i: pauseSentenceEnd when the word ends with . ? or !, else pauseInSentence."""
     return s['pauseSentenceEnd'] if words[i]['t'].rstrip()[-1:] in '.?!' else s['pauseInSentence']
 
 
@@ -96,6 +98,7 @@ def migrate_tighten(doc, words, u8=None):
 
 
 def removed_union(ranges):
+    """Merge overlapping or touching (a, b) ranges into a sorted list of disjoint [a, b] lists; empty and inverted ranges are dropped."""
     rs = sorted((float(a), float(b)) for a, b in ranges if b > a)
     out = []
     for a, b in rs:
@@ -108,6 +111,7 @@ def removed_union(ranges):
 
 # ------------------------------------------------------------------ join plan
 def cam_at(cuts, t, fallback):
+    """Camera active at master time t: the camera of the last cut with cut time <= t (cuts sorted by time), else `fallback`."""
     cam = None
     for c in cuts:
         if c['t'] <= t:
@@ -118,11 +122,13 @@ def cam_at(cuts, t, fallback):
 
 
 def angle_covers(layout, aid, t0, t1):
+    """True when angle `aid` has a single coverage segment spanning all of [t0, t1] (1 us tolerance); False for unknown angles."""
     a = next((x for x in layout['angles'] if x['id'] == aid), None)
     return bool(a) and any(cv['start'] <= t0 + 1e-6 and cv['end'] >= t1 - 1e-6 for cv in a['coverage'])
 
 
 def source_for(layout, aid, t):
+    """Coverage segment (file, offset, start, end) of angle `aid` that contains master time t, or None."""
     a = next((x for x in layout['angles'] if x['id'] == aid), None)
     if not a:
         return None
@@ -156,6 +162,7 @@ def kept_pause_at(u8, words, lb, ra):
 
 
 def other_camera(layout, cam, t0, t1):
+    """Another angle covering [t0, t1] to switch to from `cam`: the other speaker cameras first, Slides last; None when nothing covers it."""
     order = [a['id'] for a in layout['angles'] if a['id'] != cam and a['id'] != 'slides'] + [a['id'] for a in layout['angles'] if a['id'] == 'slides' and a['id'] != cam]
     return next((aid for aid in order if angle_covers(layout, aid, t0, t1)), None)
 

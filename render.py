@@ -75,6 +75,7 @@ def crop_at(cuts, t):
 
 
 def image_at(images, t):
+    """The accepted B-roll image whose [a,b) window contains master time t, or None."""
     for im in images or []:
         if im['a'] <= t < im['b']:
             return im
@@ -101,6 +102,7 @@ def expand_pieces(cuts, layout, intervals, fallback, images=None):
             segs.append((a, b, cam or fallback, crop))
 
     def covering(cam, t):
+        """Coverage entry of `cam` whose [start,end) contains master time t, or None."""
         for cv in angles[cam]['coverage']:
             if cv['start'] <= t < cv['end']:
                 return cv
@@ -146,6 +148,7 @@ def expand_pieces(cuts, layout, intervals, fallback, images=None):
 
 
 def split_pieces(pieces):
+    """Split pieces longer than CHUNK seconds into equal frame-grid-aligned chunks (parallel encoding, smooth progress); others pass through."""
     out = []
     for p in pieces:
         n = max(1, math.ceil((p['b'] - p['a']) / CHUNK))
@@ -260,6 +263,8 @@ def encode_piece(ld, piece, dst, on_progress=None, vf_extra=''):
 
 
 def verify_output(path, expected_frames, expected_len):
+    """ffprobe the muxed file and compare frame count and video/audio durations with the plan; returns a summary string.
+    Raises RuntimeError on mismatch (frames exact, video within 0.1 s, audio within 0.2 s)."""
     import json
     pr = json.loads(subprocess.run(['ffprobe', '-v', 'error', '-print_format', 'json', '-show_streams', path],
                                    capture_output=True, text=True).stdout)
@@ -273,6 +278,7 @@ def verify_output(path, expected_frames, expected_len):
 
 
 def cam_at(cuts, t, fallback):
+    """Camera id active at master time t (last cut whose quantized time <= t), or fallback when there is none."""
     cam = None
     for c in sorted(cuts, key=lambda c: c['t']):
         if qf(c['t']) <= t:
@@ -284,6 +290,7 @@ def auto_switch_cuts(cuts, layout, intervals, fallback):
     """Ephemeral cuts that change angle at every join where the same camera would continue (hides jump cuts)."""
     angles = layout['angles']
     def covers(aid, t0, t1):
+        """True when angle aid has a single coverage entry spanning all of [t0, t1]."""
         return any(cv['start'] <= t0 and cv['end'] >= t1 for cv in next(a for a in angles if a['id'] == aid)['coverage'])
     extra = []
     work = list(cuts)
@@ -303,6 +310,7 @@ def auto_switch_cuts(cuts, layout, intervals, fallback):
 
 
 def kept_words(words, intervals, corrections):
+    """Words whose midpoint lies in a kept interval, with the text replaced by the user's correction (keyed '%.3f' of the start)."""
     out = []
     for w in words:
         mid = (w['s'] + w['e']) / 2
@@ -328,11 +336,13 @@ def words_to_text(words):
 
 
 def safe_name(name):
+    """File-system-safe form of a clip name (runs of odd characters -> '_'); 'clip' when nothing is left."""
     import re
     return re.sub(r'[^\w\- .]+', '_', name).strip() or 'clip'
 
 
 def vf_chain():
+    """Base video filter chain of every camera frame: 30 fps, letterboxed to 1920x1080, yuv420p."""
     return (f'fps={OFPS},scale={OW}:{OH}:force_original_aspect_ratio=decrease,pad={OW}:{OH}:-1:-1,format=yuv420p')
 
 
@@ -346,6 +356,7 @@ def encode_transition(ld, layout, j, dst, on_progress=None, cuts=None, images=No
         import tempfile
         with tempfile.TemporaryDirectory() as td:
             def still(im, cam, t, out):
+                """Write one PNG at `out`: the full-frame image `im` when it is showing, else camera `cam` at master time t with its crop."""
                 if im and im.get('mode', 'full') == 'full':
                     img = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(dst)), '..', 'broll', im['src']))
                     run(['ffmpeg', '-y', '-v', 'error', '-loop', '1', '-t', '0.1', '-i', img, '-vf', f'scale={OW}:{OH}:force_original_aspect_ratio=increase,crop={OW}:{OH},setsar=1,format=yuv420p' + credit_filter(im.get('credit'), td), '-frames:v', '1', out])
@@ -475,6 +486,10 @@ def audio_item(master, roomtone, item, dst):
 
 
 def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
+    """Export the full video or one named clip from the ORIGINAL files to `out` (default multicam_output.mp4 / clips/<name>.mp4); returns the path.
+    kept intervals (cuts.json skips + tighten.json removals) -> join plan, pose-matched -> video and audio items encoded in parallel
+    into _multicam/render/pieces -> concat with explicit durations -> mux -> verify_output; also writes the .txt transcript and
+    render/status.json throughout. If a hardware encoder fails mid-way the whole export is redone with libx264."""
     from joins import migrate_tighten, join_plan, room_tone, cam_at
     from transcribe import load_words, words_in
     ld = os.path.abspath(lecture_dir)
@@ -486,6 +501,7 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
     status_path = os.path.join(rd, 'status.json')
 
     def status(**kw):
+        """Write render/status.json with the given fields plus a timestamp."""
         save_json(status_path, {**kw, 'time': time.time()})
 
     try:
@@ -619,6 +635,7 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
         lock = threading.Lock()
 
         def write_status():
+            """Publish encoding progress (seconds encoded, speed, ETA, join counts, warnings) to status.json."""
             enc = sum(min(prog[i], vitems[i]['len']) for i in range(len(vitems)))
             el = time.time() - t_start
             rate = enc / el if el > 2 else 0
@@ -632,6 +649,7 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
 
         stop = threading.Event()
         def ticker():
+            """Background loop: refresh status.json every 2 s until `stop` is set."""
             while not stop.wait(2.0):
                 with lock:
                     write_status()
@@ -639,9 +657,11 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
         write_status()
 
         def vjob(i_item):
+            """Encode video item i (camera piece, transition or ending tail) to pieces/piece_XXXX.mp4; returns the path."""
             i, it = i_item
             dst = os.path.join(pd, f'piece_{i:04d}.mp4')
             def on_prog(sec):
+                """Record the seconds encoded so far for item i (read by the progress ticker)."""
                 prog[i] = sec
             if it['type'] == 'video':
                 fi = float(it.get('fadeIn', 0) or 0)
@@ -659,6 +679,7 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
                 done[0] += 1
             return dst
         def ajob(i_item):
+            """Render audio item i from the master audio / room tone to pieces/audio_XXXX.wav; returns the path."""
             i, it = i_item
             return audio_item(os.path.join(ld, proj['master_audio']['name']), roomtone, it, os.path.join(pd, f'audio_{i:04d}.wav'))
         try:
@@ -677,6 +698,7 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
 
         status(state='muxing', target=target, progress=0.92, message='concatenating + muxing audio')
         def frames_of(it):
+            """Exact frame count of a video item (piece, tail or transition) for the concat durations and the verification."""
             if it['type'] == 'video':
                 return round((it['piece']['b'] - it['piece']['a']) * OFPS)
             if it['type'] == 'tail':

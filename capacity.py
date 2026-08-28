@@ -34,6 +34,9 @@ def meminfo():
 
 
 def report(lecture_dir=None):
+    """Snapshot of this machine for the UI: CPU cores, RAM/swap, free disk, proven encoder + GPUs, recommended parallel encoders,
+    estimated render speed (x realtime; replaced by the last finished render's speed from _multicam/render/status.json), the
+    clip length the disk allows (keeping 5 GB free), whether an analysis job fits in RAM right now, and human-readable notes."""
     cpu = os.cpu_count() or 4
     mem = meminfo()
     disk_free_gb = None
@@ -85,6 +88,8 @@ def report(lecture_dir=None):
 
 
 def estimate_export(minutes, rep=None, lecture_dir=None):
+    """Estimate an export of `minutes` of output: render time, temp and output size (GB), whether it fits on disk with 5 GB spare,
+    and the worker count. Uses `rep` from report() or computes it for lecture_dir."""
     rep = rep or report(lecture_dir)
     return {'minutes': round(minutes, 1), 'render_minutes': round(minutes / max(0.2, rep['est_render_speed_x']), 1),
             'temp_gb': round(minutes * MB_PER_MIN_PIECES / 1024, 2), 'output_gb': round(minutes * MB_PER_MIN_OUTPUT / 1024, 2),

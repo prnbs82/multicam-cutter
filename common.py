@@ -8,10 +8,12 @@ TOOL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def work_dir(lecture_dir):
+    """Return the lecture's `_multicam` working directory (where every derived file lives)."""
     return os.path.join(lecture_dir, '_multicam')
 
 
 def load_json(path, default=None):
+    """Read a JSON file and return its content; return `default` when the file does not exist."""
     if not os.path.exists(path):
         return default
     with open(path, encoding='utf-8') as f:
@@ -29,12 +31,15 @@ def save_json(path, data):
 
 
 def ffprobe(path):
+    """Run ffprobe on `path` and return its JSON (format + streams) as a dict; raises CalledProcessError on failure."""
     out = subprocess.run(['ffprobe', '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path],
                          capture_output=True, text=True, check=True).stdout
     return json.loads(out)
 
 
 def probe_summary(path):
+    """Summarise a media file for project.json: name, duration (s), size, mtime, creation_time, has_video/has_audio and,
+    for the real video stream (embedded mjpeg/png cover art is ignored), width/height/fps/vcodec."""
     j = ffprobe(path)
     fmt = j['format']
     v = next((s for s in j['streams'] if s['codec_type'] == 'video' and s.get('codec_name') not in ('mjpeg', 'png')), None)

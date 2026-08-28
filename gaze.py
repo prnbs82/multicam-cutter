@@ -16,10 +16,12 @@ MULTI_FRAC = 0.15        # fraction of frames with 2+ faces that triggers the "w
 
 
 def key_for(a, b):
+    """Result-file key of a clip range: start and end seconds with two decimals, e.g. '12.50-98.00'."""
     return f'{a:.2f}-{b:.2f}'
 
 
 def _status(wd, **kw):
+    """Write _multicam/gaze/status.json with the given fields plus the current time (polled by the UI)."""
     save_json(os.path.join(wd, 'gaze', 'status.json'), {**kw, 'time': time.time()})
 
 
@@ -42,13 +44,16 @@ def decode(src, start, dur, w=1920, h=1080):
 
 
 class FaceTurn:
+    """MediaPipe face detector + single-face mesh wrapped for head-turn measurement (loaded once per analysis; runs on the CPU)."""
     def __init__(self):
+        """Load MediaPipe full-range face detection and a static single-face mesh; GLOG_minloglevel=2 silences their logging."""
         os.environ.setdefault('GLOG_minloglevel', '2')
         import mediapipe as mp
         self.det = mp.solutions.face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.4)
         self.mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=False, min_detection_confidence=0.3)
 
     def faces(self, rgb):
+        """Detect faces in an RGB frame; returns [{cx, cy, w, h}] in normalised image coordinates (centre and size)."""
         d = self.det.process(rgb).detections or []
         out = []
         for x in d:
@@ -57,6 +62,8 @@ class FaceTurn:
         return out
 
     def turn(self, rgb, face):
+        """Head turn of one detected face: nose x offset from the cheek midpoint divided by the cheek-to-cheek width (0 = frontal,
+        about +-0.5 = profile), measured on a square crop of 2.2x the face size; None when the mesh finds no face in the crop."""
         H, W = rgb.shape[:2]
         cx, cy, s = face['cx'] * W, face['cy'] * H, max(face['w'] * W, face['h'] * H) * 2.2
         x0, y0 = int(max(0, cx - s / 2)), int(max(0, cy - s / 2))
@@ -73,6 +80,7 @@ class FaceTurn:
 
 
 def pick_face(faces, anchor):
+    """Choose the face to track: the one nearest the normalised (cx, cy) anchor when given, else the widest; None when there are none."""
     if not faces:
         return None
     if anchor:
@@ -192,12 +200,15 @@ def classify(times, turns, cams, has_slides, min_shot=3.0):
 
 
 def run_gaze(lecture_dir, a, b, person=None, min_shot=3.0):
+    """Gaze job for the clip [a,b]: analyse -> classify -> save _multicam/gaze/<key>.json; progress and errors go to gaze/status.json.
+    Stops early in state 'choose_person' (saving needsPerson) when a camera sees several faces and has no anchor. Returns the saved dict."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     key = key_for(a, b)
     try:
         _status(wd, state='analysing', progress=0, message='decoding frames and finding the speaker', key=key)
         def cb(ci, nc, name, frac):
+            """Progress callback from analyse(): write per-camera progress to status.json."""
             _status(wd, state='analysing', progress=(ci + frac) / nc, message=f'{name}: {frac * 100:.0f}% — head direction from 1080p frames', key=key)
         times, turns, people, cams = analyse(ld, a, b, person=person, min_shot=min_shot, status_cb=cb)
         layout = load_json(os.path.join(wd, 'layout.json'))

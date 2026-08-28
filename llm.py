@@ -4,7 +4,8 @@ Providers (config in ~/.config/multicam/ai.json, never inside the repo or the le
   none        — the tool works without any AI: keyword topic labels, noun-phrase image moments
   claude-cli  — the `claude` command installed on this machine (what the original setup used)
   anthropic   — Anthropic Messages API with an API key
-  openai      — any OpenAI-compatible chat API: xAI Grok, OpenAI, Ollama, LM Studio, Groq, ... (base_url + model + key)
+  xai         — Grok through xAI's OpenAI-compatible API (https://api.x.ai/v1) with an xAI API key
+  openai      — any other OpenAI-compatible chat API: OpenAI, Ollama, LM Studio, Groq, ... (base_url + model + key)
 
 Auto-detection when nothing is configured: `claude` on PATH -> claude-cli; ANTHROPIC_API_KEY -> anthropic;
 XAI_API_KEY / OPENAI_API_KEY -> openai; otherwise none.
@@ -18,7 +19,7 @@ PRESETS = {   # provider -> (base_url, default model)
     'openai': ('https://api.openai.com/v1', 'gpt-4o-mini'),
     'ollama': ('http://localhost:11434/v1', 'llama3.1'),
 }
-PROVIDERS = ('none', 'claude-cli', 'anthropic', 'openai')
+PROVIDERS = ('none', 'claude-cli', 'anthropic', 'xai', 'openai')
 
 
 def config():
@@ -31,7 +32,7 @@ def config():
         elif os.environ.get('ANTHROPIC_API_KEY'):
             prov = 'anthropic'
         elif os.environ.get('XAI_API_KEY'):
-            prov = 'openai'; c.setdefault('base_url', PRESETS['xai'][0]); c.setdefault('model', PRESETS['xai'][1])
+            prov = 'xai'
         elif os.environ.get('OPENAI_API_KEY'):
             prov = 'openai'
         else:
@@ -41,13 +42,18 @@ def config():
     if c['provider'] == 'anthropic':
         c.setdefault('base_url', PRESETS['anthropic'][0]); c.setdefault('model', PRESETS['anthropic'][1])
         c['api_key'] = c.get('api_key') or os.environ.get('ANTHROPIC_API_KEY', '')
+    if c['provider'] == 'xai':
+        c['base_url'] = c.get('base_url') or PRESETS['xai'][0]; c['model'] = c.get('model') or PRESETS['xai'][1]
+        c['api_key'] = c.get('api_key') or os.environ.get('XAI_API_KEY', '')
     if c['provider'] == 'openai':
-        c.setdefault('base_url', PRESETS['openai'][0]); c.setdefault('model', PRESETS['openai'][1])
-        c['api_key'] = c.get('api_key') or os.environ.get('XAI_API_KEY') or os.environ.get('OPENAI_API_KEY', '')
+        c['base_url'] = c.get('base_url') or PRESETS['openai'][0]; c['model'] = c.get('model') or PRESETS['openai'][1]
+        c['api_key'] = c.get('api_key') or os.environ.get('OPENAI_API_KEY', '')
     return c
 
 
 def save(provider='auto', base_url='', model='', api_key=None):
+    """Store the AI settings in ~/.config/multicam/ai.json and return provider_status().
+    api_key=None keeps the stored key, '' removes it, anything else replaces it."""
     c = dict(load_config('ai.json', {}) or {})
     c['provider'] = provider if provider in PROVIDERS + ('auto',) else 'auto'
     c['base_url'] = (base_url or '').strip().rstrip('/')
@@ -62,17 +68,21 @@ def save(provider='auto', base_url='', model='', api_key=None):
 
 
 def provider_status():
+    """What the UI/CLI show: effective provider, model, whether a key is present, and whether calls can succeed."""
     c = config()
     p = c['provider']
     has_key = bool(c.get('api_key'))
     if p == 'none':
-        avail, detail = False, 'no AI assistant — automatic keyword labels and image moments (add one under Advanced)'
+        avail, detail = False, 'no AI assistant — automatic keyword labels and image moments (set one up with the 🤖 AI button)'
     elif p == 'claude-cli':
         avail = bool(shutil.which('claude'))
         detail = 'Claude CLI on this machine' if avail else 'Claude CLI selected but `claude` is not installed'
     elif p == 'anthropic':
         avail = has_key
         detail = f"Anthropic API, model {c.get('model')}" + ('' if has_key else ' — no API key')
+    elif p == 'xai':
+        avail = has_key
+        detail = f"Grok (xAI), model {c.get('model')}" + ('' if has_key else ' — no xAI API key')
     else:
         avail = has_key or 'localhost' in (c.get('base_url') or '') or '127.0.0.1' in (c.get('base_url') or '')
         detail = f"OpenAI-compatible API at {c.get('base_url')}, model {c.get('model')}" + ('' if avail else ' — no API key')
@@ -84,6 +94,7 @@ def provider_status():
 
 # ------------------------------------------------------------------ back-ends
 def _post_json(url, payload, headers, timeout):
+    """POST a JSON body and return the parsed JSON reply (urllib only — no extra dependencies)."""
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method='POST',
                                  headers={'Content-Type': 'application/json', 'User-Agent': 'MulticamCutter/1.0', **headers})
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -91,6 +102,7 @@ def _post_json(url, payload, headers, timeout):
 
 
 def _ask_claude_cli(prompt, timeout):
+    """Run `claude -p` and return its text result (raises on a non-zero exit)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith('CLAUDE')}   # allow running from inside a Claude Code session
     r = subprocess.run(['claude', '-p', prompt, '--output-format', 'json'], capture_output=True, text=True, timeout=timeout, env=env)
     if r.returncode != 0:
@@ -103,6 +115,7 @@ def _ask_claude_cli(prompt, timeout):
 
 
 def _ask_anthropic(prompt, timeout, c):
+    """One user turn through the Anthropic Messages API; returns the concatenated text blocks."""
     out = _post_json(c['base_url'].rstrip('/') + '/v1/messages',
                      {'model': c['model'], 'max_tokens': 4096, 'messages': [{'role': 'user', 'content': prompt}]},
                      {'x-api-key': c['api_key'], 'anthropic-version': '2023-06-01'}, timeout)
@@ -110,29 +123,55 @@ def _ask_anthropic(prompt, timeout, c):
 
 
 def _ask_openai(prompt, timeout, c):
+    """One user turn through an OpenAI-compatible /chat/completions endpoint (xAI Grok, OpenAI, Ollama...)."""
     headers = {'Authorization': f"Bearer {c['api_key']}"} if c.get('api_key') else {}
     out = _post_json(c['base_url'].rstrip('/') + '/chat/completions',
                      {'model': c['model'], 'messages': [{'role': 'user', 'content': prompt}], 'temperature': 0.2}, headers, timeout)
     return out['choices'][0]['message']['content']
 
 
-def ask(prompt, timeout=180):
-    """Plain text answer, or None when no provider is usable / the call fails (callers fall back to heuristics)."""
+def _ask_raw(prompt, timeout):
+    """Call the configured provider; returns the text, or raises RuntimeError with a human-readable reason."""
     c = config()
     p = c['provider']
     try:
+        if p == 'none':
+            raise RuntimeError('no AI assistant configured')
         if p == 'claude-cli':
             return _ask_claude_cli(prompt, timeout)
         if p == 'anthropic':
             if not c.get('api_key'):
-                return None
+                raise RuntimeError('no Anthropic API key')
             return _ask_anthropic(prompt, timeout, c)
-        if p == 'openai':
+        if p in ('xai', 'openai'):
+            if p == 'xai' and not c.get('api_key'):
+                raise RuntimeError('no xAI API key (get one at console.x.ai)')
             return _ask_openai(prompt, timeout, c)
-    except (OSError, subprocess.TimeoutExpired, urllib.error.URLError, RuntimeError, KeyError, ValueError) as e:
-        msg = e.read().decode(errors='replace')[:300] if isinstance(e, urllib.error.HTTPError) else str(e)
-        print(f'AI provider {p} failed: {msg}')
-    return None
+        raise RuntimeError(f'unknown provider {p!r}')
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors='replace')[:300]
+        raise RuntimeError(f'{p}: HTTP {e.code} from {e.url.split("/")[2]} — {body}') from None
+    except (OSError, subprocess.TimeoutExpired, urllib.error.URLError, KeyError, ValueError) as e:
+        raise RuntimeError(f'{p}: {e}') from None
+
+
+def ask(prompt, timeout=180):
+    """Plain text answer, or None when no provider is usable / the call fails (callers fall back to heuristics)."""
+    try:
+        return _ask_raw(prompt, timeout)
+    except RuntimeError as e:
+        print(f'AI provider failed: {e}')
+        return None
+
+
+def test(timeout=60):
+    """Round trip a tiny prompt for the Test button / `multicam.py ai --test`; returns {'ok', 'reply'|'error', 'provider', 'model'}."""
+    c = config()
+    try:
+        reply = _ask_raw('Reply with exactly the two words: connection works', timeout)
+        return {'ok': True, 'reply': (reply or '').strip()[:200], 'provider': c['provider'], 'model': c.get('model', '')}
+    except RuntimeError as e:
+        return {'ok': False, 'error': str(e), 'provider': c['provider'], 'model': c.get('model', '')}
 
 
 def ask_json(prompt, timeout=180):
@@ -154,7 +193,7 @@ def ask_json(prompt, timeout=180):
 def source_name():
     """Short tag for 'who produced this label' fields."""
     p = config()['provider']
-    return {'claude-cli': 'claude', 'anthropic': 'claude', 'openai': 'llm'}.get(p, 'heuristic')
+    return {'claude-cli': 'claude', 'anthropic': 'claude', 'xai': 'grok', 'openai': 'llm'}.get(p, 'heuristic')
 
 
 claude_json = ask_json   # backwards compatibility for older call sites

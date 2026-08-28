@@ -10,6 +10,7 @@ CTYPES = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css':
 
 
 def make_handler(lecture_dir):
+    """Build the request-handler class bound to one lecture folder (routes, background jobs, locks live in this closure)."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     lock = threading.Lock()
@@ -42,6 +43,7 @@ def make_handler(lecture_dir):
     migrate_tighten()
 
     def words_fingerprint(words):
+        """Short identity string of a words.json (model, count, first/last time) used to detect stale checkpoints."""
         if not words or not words.get('words'):
             return None
         w = words['words']
@@ -79,15 +81,18 @@ def make_handler(lecture_dir):
         return st.get('state') in ('starting', 'loading', 'transcribing') and time.time() - st.get('time', 0) < 90
 
     class H(BaseHTTPRequestHandler):
+        """HTTP handler: static UI, range-capable media, and the JSON API under /api/*."""
         protocol_version = 'HTTP/1.1'
 
         def log_message(self, fmt, *args):
+            """Quieter access log: skip the polling endpoints so the server log stays readable."""
             if '/media/' in (args[0] if args else ''):
                 return
             sys.stderr.write('%s - %s\n' % (self.address_string(), fmt % args))
 
         # ---- helpers
         def send_json(self, obj, code=200):
+            """Serialise `obj` as a JSON response with the given status code."""
             body = json.dumps(obj).encode()
             self.send_response(code)
             self.send_header('Content-Type', 'application/json')
@@ -97,6 +102,7 @@ def make_handler(lecture_dir):
             self.wfile.write(body)
 
         def send_file(self, path):
+            """Serve a file with HTTP Range support (video seeking) and the right content type; 404 if missing."""
             if not os.path.isfile(path):
                 return self.send_json({'error': 'not found', 'path': path}, 404)
             size = os.path.getsize(path)
@@ -139,11 +145,13 @@ def make_handler(lecture_dir):
                 pass
 
         def read_body(self):
+            """Parse the JSON request body ({} when empty)."""
             n = int(self.headers.get('Content-Length') or 0)
             return json.loads(self.rfile.read(n) or b'{}')
 
         # ---- routes
         def do_GET(self):
+            """Read-only API: project/layout, cuts, tighten (migrated), words, envelope, job statuses, topics, keys, AI/hardware, capacity, B-roll lists, checkpoints, media files."""
             p = urlparse(self.path).path
             if p == '/':
                 return self.send_file(os.path.join(TOOL_DIR, 'web', 'index.html'))
@@ -275,6 +283,7 @@ def make_handler(lecture_dir):
             self.send_json({'error': 'not found'}, 404)
 
         def do_PUT(self):
+            """Save endpoints: cuts, tighten, keys, AI settings, encoder choice, workspace (atomic JSON writes under the lock)."""
             p = urlparse(self.path).path
             if p == '/api/cuts':
                 data = self.read_body()
@@ -323,8 +332,10 @@ def make_handler(lecture_dir):
             self.send_json({'error': 'not found'}, 404)
 
         def do_POST(self):
+            """Actions: start/cancel background jobs (render, transcribe, topics, gaze, joins, B-roll), checkpoints, AI test, project setup."""
             p = urlparse(self.path).path
             def ram_guard(what):
+                """Refuse to start an analysis when free RAM is below the streaming threshold (HTTP 507 with an explanation)."""
                 from capacity import report
                 rep = report(ld)
                 if not rep['analysis_ok_now']:
@@ -334,6 +345,9 @@ def make_handler(lecture_dir):
                 g = ram_guard({'/api/gaze': 'gaze analysis', '/api/joins/refine': 'join measurement', '/api/broll/suggest': 'image search'}[p])
                 if g is not None:
                     return g
+            if p == '/api/ai/test':              # POST {} -> round-trip a tiny prompt through the configured AI provider
+                from llm import test as ai_test
+                return self.send_json(ai_test())
             if p == '/api/render':
                 body = self.read_body()
                 with lock:
@@ -522,6 +536,7 @@ def make_handler(lecture_dir):
 
 
 def serve(lecture_dir, port=8765, open_browser=False):
+    """Run the threaded HTTP server on 127.0.0.1:port for one lecture folder until Ctrl+C."""
     handler = make_handler(lecture_dir)
     httpd = ThreadingHTTPServer(('127.0.0.1', port), handler)
     url = f'http://127.0.0.1:{port}/'

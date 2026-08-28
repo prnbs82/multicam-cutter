@@ -17,11 +17,14 @@ CLUSTER_DIST = 0.35
 
 
 def _status(wd, **kw):
+    """Write topics/status.json with the given fields plus a timestamp."""
     save_json(os.path.join(wd, 'topics', 'status.json'), {**kw, 'time': time.time()})
 
 
 # ------------------------------------------------------------------ text units
 def sentences_from_words(words, max_gap=1.0, max_words=40):
+    """Group words into sentences [{a, b, text, w0, w1}]: break at sentence punctuation, after max_words words, or before a pause
+    longer than max_gap seconds."""
     sents, cur = [], []
     for i, w in enumerate(words):
         cur.append(i)
@@ -41,6 +44,8 @@ def sentences_from_words(words, max_gap=1.0, max_words=40):
 
 # ------------------------------------------------------------------ embeddings
 def embed(texts, batch=64):
+    """L2-normalised mean-pooled MiniLM embeddings of texts, shape [len(texts), 384], computed on hw.torch_device() (batch 16 on CPU).
+    Downloads the model on first use."""
     import torch
     from transformers import AutoTokenizer, AutoModel
     from hw import torch_device
@@ -94,6 +99,7 @@ def boundaries(sents, E, granularity=0.5, block=3):
 
 
 def make_segments(sents, E, starts):
+    """Slice the sentences at boundary indices `starts` into segments [{i, a, b, s0, s1, text, emb}] with the mean embedding of each."""
     bounds = [0] + starts + [len(sents)]
     segs = []
     for i, (x, y) in enumerate(zip(bounds, bounds[1:])):
@@ -105,6 +111,7 @@ def make_segments(sents, E, starts):
 
 
 def cluster(segs, dist=CLUSTER_DIST):
+    """Cluster label per segment: average-linkage agglomerative clustering on cosine distance with threshold `dist`; [0] for one segment."""
     if len(segs) == 1:
         return [0]
     from sklearn.cluster import AgglomerativeClustering
@@ -118,6 +125,7 @@ def cluster(segs, dist=CLUSTER_DIST):
 
 # ------------------------------------------------------------------ labels
 def keyword_labels(topic_texts):
+    """Fallback names: the top-3 TF-IDF terms (uni/bigrams, English stop words) of each topic's text -> {tid: {label, summary: ''}}."""
     from sklearn.feature_extraction.text import TfidfVectorizer
     ids = list(topic_texts)
     vec = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), min_df=1, max_features=5000)
@@ -147,6 +155,9 @@ def claude_labels(topics_payload, timeout=180):
 
 # ------------------------------------------------------------------ main
 def analyse(lecture_dir, granularity=0.5, use_llm=True, a=None, b=None):
+    """Run the whole topic analysis for a lecture (optionally only words with a <= s < b) and write _multicam/topics.json; returns it.
+    sentences -> embeddings -> TextTiling boundaries -> clustering -> merge adjacent same-topic segments -> recurrences -> labels
+    (AI provider when available, else TF-IDF keywords); progress in topics/status.json. Needs at least 50 words."""
     ld = os.path.abspath(lecture_dir)
     wd = work_dir(ld)
     t0 = time.time()
