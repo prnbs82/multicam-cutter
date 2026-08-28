@@ -115,7 +115,7 @@ else
 fi
 echo "  $n. The 'multicam' command → ~/.local/bin/multicam$([ "$OS" = Linux ] && echo ', and a Multicam Cutter entry in your applications menu')"; n=$((n+1))
 echo "  $n. A hardware check (which video encoders work here, GPU use, missing pieces)"
-for x in "${NOTES[@]}"; do echo "  note: $x"; done
+for x in ${NOTES[@]+"${NOTES[@]}"}; do echo "  note: $x"; done
 echo
 echo "  Nothing is sent anywhere; the only network traffic is downloading the packages and models above."
 echo "  Full log: $LOG"
@@ -190,6 +190,6 @@ fi
 bold "Hardware check"
 python multicam.py doctor || true
 echo
-for x in "${NOTES[@]}"; do echo "note: $x"; done
+for x in ${NOTES[@]+"${NOTES[@]}"}; do echo "note: $x"; done
 bold "Done. Start the tool with:   multicam \"/path/to/your lecture folder\""
 echo "(the folder holds the camera files, the Zoom recording and its audio; the first start analyses and syncs them)"
