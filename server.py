@@ -331,6 +331,21 @@ def make_handler(lecture_dir):
                 return self.send_json({'ok': True})
             self.send_json({'error': 'not found'}, 404)
 
+        def handle_one_request(self):
+            """Wrap request handling so an exception inside a route becomes a JSON 500 (with the traceback in the server log)
+            instead of a dropped connection that the client sees as 'remote end closed connection'."""
+            try:
+                super().handle_one_request()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                try:
+                    self.send_json({'error': 'internal error: ' + traceback.format_exc().strip().splitlines()[-1][:300]}, 500)
+                except Exception:
+                    pass
+
         def do_POST(self):
             """Actions: start/cancel background jobs (render, transcribe, topics, gaze, joins, B-roll), checkpoints, AI test, project setup."""
             p = urlparse(self.path).path

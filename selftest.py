@@ -37,8 +37,10 @@ for rel in ('joinfix.json', 'words.json', 'tighten.json', 'workspace.json'):
     except FileNotFoundError: pass
 for d in ('broll', 'gaze', 'checkpoints', 'posematch', 'transcribe', 'topics', 'render'):
     shutil.rmtree(os.path.join(ld, '_multicam', d), ignore_errors=True)
+os.makedirs(os.path.join(ld, '_multicam', 'logs'), exist_ok=True)
+SRV_LOG = os.path.join(ld, '_multicam', 'logs', 'selftest-server.log')       # server output (tracebacks land here; printed on failure)
 srv = subprocess.Popen([sys.executable, os.path.join(here, 'multicam.py'), 'serve', ld, '--port', str(port)],
-                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                       stdout=open(SRV_LOG, 'w'), stderr=subprocess.STDOUT)
 def req(path, method='GET', body=None, headers={}):
     """HTTP request to the local server (body JSON-encoded); returns (status, headers dict, body bytes)."""
     r = urllib.request.Request(base + path, method=method, data=(json.dumps(body).encode() if body is not None else None),
@@ -270,5 +272,12 @@ try:
     print(f'PiP position check: bottom-left diff {bl:.1f} (image there) vs top-right diff {tr:.1f} (camera there)'); assert bl > 15 and tr < 8, (bl, tr)
     print('broll render OK (full-frame + PiP pieces, credits in txt)')
     print('SELFTEST PASSED')
+except BaseException:
+    print('\n--- server log (last 60 lines) ---')
+    try:
+        print(''.join(open(SRV_LOG, errors='replace').readlines()[-60:]))
+    except OSError:
+        pass
+    raise
 finally:
     srv.terminate()
