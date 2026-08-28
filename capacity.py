@@ -10,7 +10,7 @@ EST_RENDER_SPEED_X = 2.2      # x realtime with 4 parallel x264-medium encoders 
 MB_PER_MIN_PIECES = 60.0      # 1080p30 CRF18 intermediates + wav audio, per output minute
 MB_PER_MIN_OUTPUT = 60.0
 RAM_PER_ENCODER_GB = 0.7      # ffmpeg HEVC decode + libx264 medium 1080p
-RAM_ANALYSIS_GB = 2.5         # mediapipe + opencv + one 1080p frame stream
+RAM_ANALYSIS_GB = 1.5         # mediapipe + opencv + one streamed 1080p frame (measured ~1.2 GB peak)
 RAM_SERVER_GB = 0.5
 
 
@@ -68,9 +68,10 @@ def report(lecture_dir=None):
     if mem['swap_total'] < 0.5:
         notes.append('No swap: a memory spike cannot spill to disk, so RAM exhaustion freezes the machine instead of slowing it. '
                      'Consider a swap file (e.g. 8 GB) as a safety net.')
-    if mem['available'] < 6:
+    if mem['available'] < 3:
         notes.append(f'Only {mem["available"]:.1f} GB RAM available right now — close other applications before exporting or analysing.')
-    analysis_ok = mem['available'] > RAM_ANALYSIS_GB + 2.0
+    # analyses stream, so they need RAM_ANALYSIS_GB plus a little headroom; swap counts for part of it (macOS/Linux page well)
+    analysis_ok = mem['available'] + min(mem['swap_free'], 1.0) > RAM_ANALYSIS_GB + 0.5
     return {
         'cpu_cores': cpu, 'ram_total_gb': round(mem['total'], 1), 'ram_available_gb': round(mem['available'], 1),
         'swap_gb': round(mem['swap_total'], 1), 'disk_free_gb': None if disk_free_gb is None else round(disk_free_gb, 1),
