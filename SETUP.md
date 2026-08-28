@@ -11,7 +11,7 @@ this document is the specification behind it.
 |---|---|---|
 | Linux x86_64 (Ubuntu 22.04+, Debian 12+, Fedora 39+) | supported | reference platform |
 | macOS 13+ (Intel and Apple Silicon) | supported | Homebrew for ffmpeg + Python |
-| Windows 10/11 | via **WSL2** (Ubuntu) only | native Windows is not supported: `server.py` uses POSIX process groups (`os.killpg`, `start_new_session`) |
+| Windows 10/11 | via **WSL2** (Ubuntu) only | native Windows is not supported: `server.py` uses POSIX process groups (`os.killpg`, `start_new_session`). In WSL2: CUDA works (Whisper on NVIDIA), NVENC/QSV/VA-API do **not** (no `/dev/dri`, no nvidia-encode) → CPU libx264 exports; keep data on the Linux filesystem; raise the RAM cap via `.wslconfig` (default is 50% of the host) |
 | Raspberry Pi / ARM Linux | untested | mediapipe wheels exist for aarch64; expect slow transcripts |
 
 Minimum hardware: 4 CPU cores, 8 GB RAM, 20 GB free disk. Comfortable: 6+ cores, 16 GB RAM.
@@ -28,7 +28,7 @@ GPUs are optional (see §6).
 | `xdg-open` (Linux) / `open` (macOS) | optional | – | open the browser automatically | part of `xdg-utils` |
 | `git` | optional | any | cloning / updating | `sudo apt install git` |
 | A web browser | **required** | Firefox or Chromium/Chrome/Edge/Safari, recent | the UI runs at `http://127.0.0.1:8765/` | – |
-| NVIDIA driver | optional | ≥ 525 (CUDA 12) | Whisper on the GPU, NVENC encoder | vendor installer; in WSL2 the Windows driver is enough |
+| NVIDIA driver | optional | ≥ 525 (CUDA 12) | Whisper on the GPU, NVENC encoder (native Linux only) | vendor installer; in WSL2 the Windows driver is enough for CUDA, NVENC is unavailable |
 | Intel media driver (`intel-media-va-driver`) or Mesa (AMD) | optional | – | VA-API / Quick Sync hardware encoders on Linux | `sudo apt install intel-media-va-driver-non-free` / `mesa-va-drivers` |
 
 ## 3. Python packages (`requirements.txt`)

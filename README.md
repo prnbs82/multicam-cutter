@@ -33,7 +33,9 @@ cd multicam-cutter
 - **Ubuntu/Debian**: `sudo apt install ffmpeg python3-venv` first.
 - **macOS**: `brew install ffmpeg python@3.12` first (Intel and Apple Silicon both work).
 - **Windows**: install WSL2 with Ubuntu (`wsl --install` in PowerShell), open Ubuntu, then follow
-  the Linux steps. NVIDIA GPUs are available inside WSL2.
+  the Linux steps. Keep the lecture folder on the Linux side (`~/lectures/…`, not `/mnt/c/…`) for fast
+  ffmpeg I/O, and raise WSL's RAM cap in `C:\Users\<you>\.wslconfig` (`[wsl2]`, `memory=12GB`, `swap=8GB`).
+  An NVIDIA GPU works for Whisper (CUDA) in WSL2, but **not** for video encoding — exports use the CPU there.
 - **NVIDIA GPU**: `./install.sh --cuda` puts Whisper on the GPU (much faster transcripts).
 - `./install.sh --no-models` skips the model downloads (they happen on first use instead).
 
