@@ -25,7 +25,7 @@ Requirements: **Python 3.10–3.12** and **ffmpeg**. 8 GB RAM works (with a smal
 16 GB+ is comfortable. Any GPU is a bonus, none is required.
 
 ```bash
-git clone https://github.com/<you>/multicam-cutter.git
+git clone https://github.com/prnbs82/multicam-cutter.git
 cd multicam-cutter
 ./install.sh            # creates .venv, installs packages, downloads the models, installs the `multicam` command
 ```

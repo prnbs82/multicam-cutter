@@ -120,7 +120,7 @@ sudo apt install -y ffmpeg python3 python3-venv python3-pip lsof git
 # macOS
 # brew install ffmpeg python@3.12 git
 
-git clone https://github.com/<owner>/multicam-cutter.git
+git clone https://github.com/prnbs82/multicam-cutter.git
 cd multicam-cutter
 ./install.sh                 # add --cuda on an NVIDIA machine, --no-models to defer downloads
 ```
