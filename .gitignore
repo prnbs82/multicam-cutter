@@ -1,0 +1,22 @@
+# per-lecture work folders and media never belong in the repo
+_multicam/
+*.mp4
+*.MOV
+*.mov
+*.m4a
+*.wav
+*.mkv
+*.vtt
+# secrets and machine-local config
+keys.json
+ai.json
+hw.json
+.env
+# python / editor / os
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+# editor backups of the single-file UI
+web/*.bak.html

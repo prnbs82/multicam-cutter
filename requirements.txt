@@ -1,0 +1,11 @@
+# Multicam Cutter — Python 3.10–3.12 (mediapipe has no wheels for newer Pythons yet)
+# install.sh installs these into .venv; CPU-only torch by default (pass --cuda for NVIDIA).
+numpy>=1.24,<2
+scipy>=1.10
+psutil>=5.9
+faster-whisper>=1.1,<1.3
+mediapipe==0.10.15
+torch>=2.1
+transformers>=4.40,<5
+scikit-learn>=1.3
+pillow>=9

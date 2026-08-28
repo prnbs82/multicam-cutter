@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Multicam Cutter launcher (Linux / macOS / WSL2).
+#   multicam "/path/to/lecture folder"   start (first time: analyse + sync + proxies), open the browser
+#   multicam                             start the last used lecture folder
+#   multicam --stop                      stop the server
+#   multicam doctor                      hardware report
+set -u
+TOOL_DIR="$(cd "$(dirname "$(python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$0")")" && pwd)"
+PY="$TOOL_DIR/.venv/bin/python"; [ -x "$PY" ] || PY="$(command -v python3)"
+CONF="${MULTICAM_CONFIG:-$HOME/.config/multicam}"; mkdir -p "$CONF"
+PORT="${MULTICAM_PORT:-8765}"; URL="http://127.0.0.1:$PORT/"
+open_url() { (command -v xdg-open >/dev/null && xdg-open "$1" >/dev/null 2>&1) || (command -v open >/dev/null && open "$1") || echo "open $1 in your browser"; }
+port_pids() { (command -v lsof >/dev/null && lsof -ti tcp:"$PORT" 2>/dev/null) || (command -v fuser >/dev/null && fuser "$PORT"/tcp 2>/dev/null) || true; }
+up() { curl -sf "$URL/api/capacity" >/dev/null 2>&1; }
+
+case "${1:-}" in
+  --stop) P="$(port_pids)"; if [ -n "$P" ]; then kill $P 2>/dev/null; echo stopped; else echo "not running"; fi; exit 0;;
+  doctor) shift; exec "$PY" "$TOOL_DIR/multicam.py" doctor "$@";;
+  -h|--help) sed -n 2,6p "$0"; exit 0;;
+esac
+
+LECTURE="${1:-}"
+if [ -z "$LECTURE" ] && [ -f "$CONF/last.json" ]; then LECTURE="$("$PY" -c 'import json,sys;print(json.load(open(sys.argv[1])).get("lecture",""))' "$CONF/last.json")"; fi
+if [ -z "$LECTURE" ]; then
+  echo "Which folder holds the lecture recording (camera files + Zoom recording + its audio)?"; read -r -p "> " LECTURE
+fi
+LECTURE="${LECTURE%/}"
+if [ ! -d "$LECTURE" ]; then echo "not a folder: $LECTURE"; exit 1; fi
+
+if [ ! -f "$LECTURE/_multicam/layout.json" ]; then
+  echo "First start for this folder: scanning files, syncing audio, building proxies (a few minutes)..."
+  "$PY" "$TOOL_DIR/multicam.py" setup "$LECTURE" || { echo "setup failed — see the messages above"; exit 1; }
+fi
+"$PY" -c 'import json,sys;json.dump({"lecture":sys.argv[1]},open(sys.argv[2],"w"))' "$LECTURE" "$CONF/last.json"
+
+if up; then echo "already running at $URL"; open_url "$URL"; exit 0; fi
+P="$(port_pids)"; [ -n "$P" ] && kill $P 2>/dev/null && sleep 0.5
+mkdir -p "$LECTURE/_multicam/logs"
+cd "$TOOL_DIR" && nohup "$PY" multicam.py serve "$LECTURE" --port "$PORT" > "$LECTURE/_multicam/logs/server.log" 2>&1 &
+for _ in $(seq 1 80); do up && break; sleep 0.25; done
+if up; then
+  echo "Multicam Cutter running at $URL   (log: $LECTURE/_multicam/logs/server.log)"; open_url "$URL"
+else
+  echo "server did not start — see $LECTURE/_multicam/logs/server.log"; tail -5 "$LECTURE/_multicam/logs/server.log"; exit 1
+fi

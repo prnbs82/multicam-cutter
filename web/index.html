@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Multicam Cutter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--danger:#f85149}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body{display:grid;grid-template-rows:auto 1fr;height:100vh;overflow:hidden}
+header{display:flex;align-items:center;gap:12px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:14px;margin:0;font-weight:600}
+header .spacer{flex:1}
+header .status{color:var(--muted);font-size:12px}
+#tabs{display:flex;gap:2px;margin-left:12px}
+#tabs button{border-radius:5px 5px 0 0;padding:5px 14px;border-bottom:none;background:#0d1117;color:var(--muted)}
+#tabs button.on{background:#21262d;color:var(--text);font-weight:600}
+body:not(.advanced) .adv{display:none !important}
+#advSwitch{display:flex;align-items:center;gap:5px;color:var(--muted);font-size:12px;cursor:pointer}
+.bigbtn{font-size:14px;padding:7px 14px}
+#saveState.ok{color:#3fb950}
+.pz.na{background:#21262d;color:#6e7681;cursor:default} #saveState.pending{color:#e3b341} #saveState.bad{color:var(--danger);font-weight:700}
+main{display:grid;gap:8px;padding:8px;min-height:0}
+.tabhide{position:fixed !important;left:-300vw !important;top:0;width:100vw;height:calc(100vh - 40px);pointer-events:none}
+/* ---- cut tab */
+#cutMain{grid-template-columns:1fr 340px;grid-template-rows:minmax(0,1fr) auto auto}
+#monitors{grid-column:1;grid-row:1;display:grid;grid-template-columns:3fr 2fr;gap:8px;min-height:0}
+#side{grid-column:2;grid-row:1/4;display:flex;flex-direction:column;min-height:0;gap:8px}
+#transport{grid-column:1;grid-row:2}
+#timelineWrap{grid-column:1;grid-row:3}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;min-height:0;position:relative}
+.panel h2{margin:0;padding:4px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);border-bottom:1px solid var(--line)}
+#mvBox{display:flex;align-items:center;justify-content:center;overflow:hidden;padding:6px}
+#mvFrame{position:relative;max-width:100%;max-height:100%}
+#mv{display:block;width:100%;height:100%;background:#000}
+.tile{position:absolute;border:2px solid transparent;cursor:pointer;transition:border-color .1s}
+.tile:hover{border-color:rgba(255,255,255,.5)}
+.tile.active{border-color:var(--tc);box-shadow:inset 0 0 0 1px var(--tc)}
+.tile .lbl{position:absolute;left:6px;top:6px;display:flex;gap:6px;align-items:center;font-weight:600;text-shadow:0 1px 2px #000}
+.tile .key{background:var(--tc);color:#000;border-radius:4px;padding:0 6px;font-size:12px}
+.tile .ns{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);color:#aaa;font-weight:700;letter-spacing:.2em;font-size:14px}
+.tile.nosignal .ns{display:flex}
+.tile.nosignal{cursor:not-allowed}
+#pgmBox{display:flex;flex-direction:column}
+#pgmWrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding:6px;position:relative}
+#cropBox{position:absolute;border:2px solid #e3b341;box-shadow:0 0 0 9999px rgba(0,0,0,.55);cursor:move;display:none;box-sizing:border-box}
+#cropBox .h{position:absolute;width:14px;height:14px;background:#e3b341;border:2px solid #000;border-radius:3px}
+#cropBox .h.nw{left:-8px;top:-8px;cursor:nwse-resize} #cropBox .h.ne{right:-8px;top:-8px;cursor:nesw-resize} #cropBox .h.sw{left:-8px;bottom:-8px;cursor:nesw-resize} #cropBox .h.se{right:-8px;bottom:-8px;cursor:nwse-resize}
+#cropBox .lbl{position:absolute;left:0;top:-22px;background:#e3b341;color:#000;font-weight:700;font-size:11px;padding:1px 6px;border-radius:3px;white-space:nowrap}
+#pgmBox.framing h2{background:#3a2f1a;color:#e3b341}
+#pgm{max-width:100%;max-height:100%;background:#000;aspect-ratio:16/9}
+.pgmLabel{position:absolute;left:14px;top:14px;font-weight:700;padding:2px 8px;border-radius:4px;color:#000;background:#888}
+#transport{display:flex;align-items:center;gap:8px;padding:6px 10px;flex-wrap:wrap}
+button,select,input[type=text],input[type=number]{background:#21262d;color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 9px;font:inherit;cursor:pointer}
+button:hover{background:#30363d}
+button.primary{background:#238636;border-color:#2ea043}
+button.primary:hover{background:#2ea043}
+button.danger{border-color:var(--danger);color:var(--danger)}
+button:disabled{opacity:.5;cursor:default}
+#tc{font:600 20px/1 ui-monospace,SFMono-Regular,Menlo,monospace;min-width:140px}
+#tcDur{color:var(--muted);font:14px ui-monospace,monospace}
+#tcMaster{color:var(--muted);font:11px ui-monospace,monospace}
+.sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+label.chk{display:flex;align-items:center;gap:4px;color:var(--muted)}
+#timelineWrap{padding:0}
+#tl{display:block;width:100%;cursor:crosshair}
+#tlHelp{padding:2px 8px;color:var(--muted);font-size:11px;border-top:1px solid var(--line)}
+#side .panel{display:flex;flex-direction:column}
+#transcriptBox{flex:1.3}
+#cutsBox{flex:.9}
+#rangesBox{flex:.8}
+th{color:var(--muted);font-weight:600;font-size:11px}
+td input[type=text]{width:100%;padding:1px 4px}
+.scroll{overflow:auto;flex:1;min-height:0}
+.cue{padding:3px 8px 3px 10px;border-left:4px solid #333;cursor:pointer;color:#c9d1d9}
+.cue:hover{background:#1f2630}
+.cue.cur{background:#233046}
+.cue .t{color:var(--muted);font:11px ui-monospace,monospace;margin-right:6px}
+table{width:100%;border-collapse:collapse}
+td,th{padding:3px 6px;text-align:left;border-bottom:1px solid #21262d;font-size:12px}
+tr.sel td{background:#233046}
+tr:hover td{background:#1f2630}
+td .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+td select{padding:1px 4px}
+td .mini{padding:1px 6px;font-size:11px}
+#renderBox{padding:8px;display:flex;flex-direction:column;gap:6px}
+#prog{height:8px;background:#21262d;border-radius:4px;overflow:hidden}
+#progBar{height:100%;width:0;background:var(--accent);transition:width .3s}
+#renderMsg{color:var(--muted);font-size:12px;word-break:break-all}
+.settings{display:flex;gap:10px;align-items:center;padding:6px 8px;flex-wrap:wrap;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
+/* ---- tighten tab */
+#tightenMain{grid-template-columns:minmax(420px,1fr) minmax(0,1.4fr);grid-template-rows:minmax(0,1fr)}
+#tLeft{display:flex;flex-direction:column;gap:8px;padding:8px;overflow:auto}
+#tLeft>*{flex:0 0 auto}
+#tLeft .trow{line-height:1.6}
+#tClipsBox .scroll,#tTopicsBox .scroll{max-height:26vh;overflow:auto}
+#tAsrMsg,#pMsg{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%}
+#tRight{display:flex;flex-direction:column;min-height:0}
+.trow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.trow input[type=number]{width:62px;padding:2px 5px}
+#tPgmWrap{position:relative;background:#000;border-radius:4px;aspect-ratio:16/9;width:100%}
+#tPgm{width:100%;height:100%;display:block}
+#tTc{font:600 15px ui-monospace,monospace;color:var(--text)}
+#tProg{height:6px;background:#21262d;border-radius:3px;overflow:hidden;flex:1;min-width:120px}
+#tProgBar{height:100%;width:0;background:var(--accent);transition:width .3s}
+#tMini{display:block;width:100%;height:34px;cursor:pointer;border-bottom:1px solid var(--line)}
+#tText{padding:10px 14px;font-size:16px;line-height:1.9;user-select:none;color:#c9d1d9}
+#tText p{margin:0 0 12px;padding-left:10px;border-left:4px solid transparent;border-radius:3px}
+.chip{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.02em;padding:1px 8px;border-radius:9px;color:#000;margin:0 6px 0 -4px;cursor:pointer;vertical-align:2px}
+.w{padding:1px 2px;border-radius:3px;cursor:pointer}
+.w:hover{background:#1f2630}
+.w.cur{background:#233046;color:#fff;box-shadow:0 0 0 1px #58a6ff inset}
+.w.sel{background:#2d4a7a;color:#fff}
+.w.rm{text-decoration:line-through;color:#8b4b4b;opacity:.75}
+.w.fill{text-decoration:underline wavy #e3b341;text-decoration-skip-ink:none}
+.w.lowp{border-bottom:1px dotted #8b949e}
+.w[contenteditable=true]{background:#fff;color:#000;outline:2px solid var(--accent);user-select:text}
+.pz{display:inline-block;font-size:12px;padding:0 6px;margin:0 3px;border-radius:9px;background:#3a2f1a;color:#e3b341;cursor:pointer;vertical-align:1px}
+.pz.rm{background:#3a1f1f;color:#8b4b4b;text-decoration:line-through}
+.pz:hover{filter:brightness(1.25)}
+#tStats{color:var(--text)}
+.bcard{display:grid;grid-template-columns:200px 1fr;gap:10px;padding:10px;border-bottom:1px solid #21262d}
+.bcard img{width:200px;height:112px;object-fit:cover;border-radius:4px;background:#000;cursor:pointer}
+.bcard.used{background:rgba(63,185,80,.08);border-left:4px solid #3fb950}
+.bcard.ignored{opacity:.45}
+.bcard .sent{color:#c9d1d9;font-size:13px;line-height:1.5}
+.bcard .sent b{background:#e3b341;color:#000;border-radius:3px;padding:0 3px}
+.bcard .meta{color:var(--muted);font-size:11px;margin:3px 0}
+.bcard .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
+.bused{display:grid;grid-template-columns:96px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #21262d;font-size:12px}
+.bused img{width:96px;height:54px;object-fit:cover;border-radius:3px}
+.w.inclip{border-radius:2px;color:#fff}
+.w.inclip.selclip{outline:1px solid rgba(255,255,255,.35)}
+.w.clipstart{border-left:3px solid #fff;padding-left:3px}
+.w.clipend{border-right:3px solid #fff;padding-right:3px}
+.clipchip{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:9px;color:#000;margin:0 4px 0 0;cursor:pointer;vertical-align:2px}
+#tText.notopics p{border-left-color:transparent !important;background:none !important}
+#tText.notopics .chip{display:none}
+.swatch{width:18px;height:18px;padding:0;border:1px solid var(--line);border-radius:4px;vertical-align:middle;cursor:pointer;background:none}
+.tile.unavail{cursor:default}
+.tile.unavail .ns{display:flex;background:rgba(0,0,0,.8);font-size:12px;letter-spacing:.05em}
+#tLegend{font-size:11px;color:var(--muted);padding:4px 12px;border-bottom:1px solid var(--line)}
+.topic{padding:8px 10px;border-bottom:1px solid #21262d;border-left:5px solid #333}
+.topic h3{margin:0 0 3px;font-size:13px;display:flex;gap:8px;align-items:center}
+.topic h3 .dur{color:var(--muted);font-weight:400;font-size:12px}
+.topic .sum{color:#c9d1d9;font-size:12px;margin:0 0 5px}
+.segchip{display:inline-block;font:11px ui-monospace,monospace;padding:1px 6px;margin:2px 4px 2px 0;border-radius:4px;background:#21262d;cursor:pointer}
+.segchip:hover{background:#30363d}
+.ret{color:#e3b341;font-size:12px;margin:2px 0}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#30363d;color:#fff;padding:8px 14px;border-radius:6px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+#toast.show{opacity:1}
+#ctx{position:fixed;display:none;background:#21262d;border:1px solid var(--line);border-radius:6px;padding:4px;z-index:40;min-width:160px}
+#ctx div{padding:5px 10px;cursor:pointer;border-radius:4px;display:flex;gap:8px;align-items:center}
+#ctx div:hover{background:#30363d}
+#help{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:60}
+#help .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px 24px;max-width:720px;line-height:1.7}
+#help kbd{background:#30363d;border-radius:4px;padding:0 6px;font:12px ui-monospace,monospace;margin-right:4px}
+#help .cols{display:grid;grid-template-columns:1fr 1fr;gap:0 24px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Multicam Cutter</h1>
+  <nav id="tabs"><button data-tab="tighten">1 · Edit words &amp; clips</button><button data-tab="cut">2 · Cameras</button><button data-tab="images">3 · Images</button></nav>
+  <span id="projName" class="status"></span>
+  <span class="spacer"></span>
+  <label id="advSwitch" title="show every setting and expert control"><input type="checkbox" id="advToggle"> Advanced</label>
+  <span id="capState" class="status adv" title="what this machine can handle (RAM / CPU / disk); click to refresh"></span>
+  <select id="encSel" class="adv" title="Video encoder for exports: auto picks a proven GPU encoder (NVIDIA NVENC, Intel Quick Sync, Apple VideoToolbox) or the CPU; VA-API is available on Linux Intel/AMD but the CPU usually looks better"></select>
+  <span id="saveState" class="status" title="Every change is written to _multicam/cuts.json and tighten.json within a second. Close the browser any time; reopening resumes where you were.">—</span>
+  <button id="btnSaveNow" title="Write everything to disk right now (it autosaves anyway)">💾 Save now</button>
+  <button id="btnCheckpoint" class="adv" title="Keep a named snapshot of all cuts and word edits that you can return to">⛃ Checkpoint…</button>
+  <select id="selCheckpoint" class="adv" title="Restore a checkpoint (the current state is snapshotted first)"><option value="">restore…</option></select>
+  <button id="btnHelp" title="Keyboard shortcuts">? Help</button>
+</header>
+
+<!-- ============================================================ CUT TAB -->
+<main id="cutMain">
+  <section id="monitors">
+    <div class="panel" id="mvBox">
+      <div id="mvFrame">
+        <video id="mv" src="/media/multiview.mp4" preload="auto" playsinline></video>
+        <div id="tiles"></div>
+      </div>
+    </div>
+    <div class="panel" id="pgmBox">
+      <h2>Program — what the final video shows</h2>
+      <div id="pgmWrap"><canvas id="pgm" width="640" height="360"></canvas><div id="pgmLabel" class="pgmLabel">—</div><div id="cropBox"><div class="lbl"></div><div class="h nw"></div><div class="h ne"></div><div class="h sw"></div><div class="h se"></div></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="transport">
+    <label class="chk" style="color:var(--text)">Clip <select id="scopeSel" title="Work on one clip: the timeline, playback, tiles and cut list show only this clip"><option value="">whole lecture</option></select></label>
+    <label class="chk adv"><input type="checkbox" id="scopeLoop"> loop clip</label>
+    <span class="sep"></span>
+    <button id="btnPlay" class="primary" title="Space">▶ Play</button>
+    <button id="btnBack10" title="J">−10s</button>
+    <button id="btnFwd10" title="L">+10s</button>
+    <span class="sep"></span>
+    <span><span id="tc">00:00:00.00</span><span id="tcDur">/ 00:00:00</span><br><span id="tcMaster"></span></span>
+    <span class="sep"></span>
+    <label class="chk adv">speed <select id="speed"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label>
+    <span class="sep"></span>
+    <button id="btnView" class="adv" title="Tightened: removed parts vanish, joins are marked. Master: full recording, removals hatched.">View: tightened</button>
+    <button id="btnPropose" class="adv" title="Insert a cut to another angle at the JERKY same-camera joins (the speaker moved noticeably across the removed part — measured automatically; red/amber dots on the joins row). Shift+click: at every same-camera join.">⇄ Switch camera at jerky joins</button><span id="poseState" class="status adv" title="joins are measured automatically in the background"></span>
+    <span class="sep"></span>
+    <button id="btnGaze" class="adv" title="Re-run: propose camera angles for the selected clip from where the speaker is looking (head direction on the original frames; ~1 min per 3 min of clip)">👁 Propose angles from gaze</button><label class="chk adv" title="New clips are analysed in the background as soon as they are created; a clip without camera cuts gets the proposal applied automatically when you open it here"><input type="checkbox" id="gazeAuto" checked> auto</label><span id="gazeState" class="status"></span>
+    <span class="sep"></span>
+    <button id="btnFrame" title="Z — frame the current shot: drag/resize the box on the Program monitor (16:9 locked); + / − zoom, arrows nudge, 0 reset, Esc done">⤢ Frame shot</button><button id="btnFrameReset" title="full frame for this shot">reset</button><button id="btnFrameAll" title="copy this shot's framing to every block of the same camera">→ all of this camera</button><span id="frameInfo" class="status"></span>
+    <button id="btnPose" style="display:none"></button>
+    <span class="sep"></span>
+    <span class="adv"><button id="btnIn" title="I">Set In</button><button id="btnOut" title="O">Set Out</button><button id="btnClearIO">clear I/O</button>
+    <span class="sep"></span>
+    <button id="btnSkip" title="X — press at start, again at end" style="border-color:#f85149">✂ Cut out (X)</button>
+    <span class="sep"></span>
+    <label class="chk">lead <input type="number" id="lead" step="0.1" min="0" max="3" value="0.4"> s</label>
+    <label class="chk"><input type="checkbox" id="snapLive"> snap live cuts to pauses</label>
+    <label class="chk"><input type="checkbox" id="follow" checked> follow transcript</label>
+    <span class="sep"></span></span>
+    <button id="btnUndo" title="Ctrl+Z">↶ Undo</button><button id="btnRedo" title="Ctrl+Shift+Z">↷ Redo</button>
+  </section>
+
+  <section class="panel" id="timelineWrap">
+    <canvas id="tl" height="150"></canvas>
+    <div id="tlHelp">Press <b>1</b>/<b>2</b>/<b>3</b> or click a camera while it plays to switch to it · click a block and press another number to change it · drag a block's left edge to move the cut · <b>Del</b> removes a cut · wheel = zoom<span class="adv"> · right-click a block or a join tick for more · <b>S</b> snap · <b>[ ]</b> prev/next cut · <b>X</b> cut-out range</span></div>
+  </section>
+
+  <aside id="side">
+    <div class="panel" id="transcriptBox">
+      <h2 id="transcriptHead">Transcript</h2>
+      <div class="scroll" id="transcript"></div>
+    </div>
+    <div class="panel" id="cutsBox">
+      <h2>Cuts <span id="cutCount"></span><span class="spacer" style="float:right"><button id="btnClearCuts" class="mini danger" title="remove camera cuts and start again (a checkpoint is saved first)">✕ clear cuts</button></span></h2>
+      <div class="settings" id="cutEdit" style="display:none;gap:6px"><b id="ceTitle" style="color:var(--text)"></b><select id="ceCam"></select><span>at</span><input type="text" id="ceTime" style="width:92px;font-family:ui-monospace,monospace" title="position in the displayed timeline (mm:ss.ff); Enter to apply"><button class="mini" id="ceM1s" title="1 s earlier">−1s</button><button class="mini" id="ceM1f" title="1 frame earlier">−1f</button><button class="mini" id="ceP1f" title="1 frame later">+1f</button><button class="mini" id="ceP1s" title="1 s later">+1s</button><button class="mini" id="ceSnap" title="snap to the nearest join / pause">snap</button><button class="mini" id="ceFrame" title="zoom / reframe this shot">⤢</button><button class="mini danger" id="ceDel" title="remove this cut (the previous camera continues)">✕</button></div>
+      <div class="settings adv">fallback camera when no signal: <select id="fallback"></select> <label class="chk"><input type="checkbox" id="previewSkips" checked> skip removed parts in playback</label></div>
+      <div class="scroll"><table id="cutTable"><tbody></tbody></table></div>
+    </div>
+    <div class="panel adv" id="rangesBox">
+      <h2>Cut-outs &amp; clips</h2>
+      <div class="scroll">
+        <table id="skipTable"><thead><tr><th colspan="4" style="color:#f85149">✂ cut out of the final video</th></tr></thead><tbody></tbody></table>
+        <table id="clipTable"><thead><tr><th colspan="4" style="color:#d2a8ff">▣ clips (defined by words in the Tighten tab) — click to work on one</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <div class="panel" id="renderBox">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="exportTarget"><option value="full">Full video</option></select><button id="btnRender" class="primary">⬇ Export full video</button><button id="btnCancelRender" class="danger" style="display:none">✕ Cancel</button><span id="renderState" class="status">idle</span></div>
+      <div id="prog"><div id="progBar"></div></div>
+      <div id="renderMsg">Renders from the original files at 1920×1080/30 with the master audio; word-level removals and cut-outs are applied; a .txt transcript is written next to each export. Full video → <code>multicam_output.mp4</code>, clips → <code>clips/&lt;name&gt;.mp4</code>.</div>
+    </div>
+  </aside>
+</main>
+
+<!-- ============================================================ TIGHTEN TAB -->
+<main id="tightenMain" style="display:none">
+  <section class="panel" id="tLeft">
+    <div id="tPgmWrap"><canvas id="tPgm" width="960" height="540"></canvas><div id="tPgmLabel" class="pgmLabel">—</div></div>
+    <div class="trow"><button id="tPlay" class="primary" title="Space">▶ Play</button><button id="tBack" title="J">−5s</button><button id="tFwd" title="L">+5s</button><span id="tTc">00:00 / 00:00</span><label class="chk"><input type="checkbox" id="tFollow" checked> follow</label><label class="chk adv" title="paragraph tints and topic chips in the transcript"><input type="checkbox" id="tShowTopics" checked> topic colours</label><label class="chk adv">speed <select id="tSpeed"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label></div>
+    <div class="trow"><button id="tAuto" class="primary bigbtn" title="shortens long pauses and removes filler words (um, uh, you know…) in one go; the app then makes every cut sound and look natural">✨ Tighten automatically</button><button id="tUndo2" title="Ctrl+Z">↶ Undo</button><button id="tRedo2" title="Ctrl+Shift+Z">↷ Redo</button><span id="tAutoInfo" style="color:var(--muted)"></span></div>
+    <div class="trow adv">pauses longer than <input type="number" id="tPauseThr" step="0.1" min="0.2" value="0.7"> s → shorten to <input type="number" id="tPauseIn" step="0.05" min="0.1" value="0.30"> s in-sentence · <input type="number" id="tPauseEnd" step="0.05" min="0.1" value="0.55"> s after a sentence <button id="tRemovePauses">Remove pauses</button><button id="tAcceptFillers">Accept fillers</button></div>
+    <div class="trow adv" title="Joins where the same camera continues: pause joins get a dissolve built from the removed footage (this adds the micro pause back); word joins hold the last frame briefly under a dissolve. Camera changes are hard cuts.">joins: dissolve <input type="number" id="tDissolve" step="1" min="0" max="15" value="6"> frames · word joins hold <input type="number" id="tHold" step="10" min="0" max="500" value="120"> ms <span id="tJoinStats"></span></div>
+    <div class="trow adv" title="Every export (clip or full video) fades in from black and ends with the last frame held over room tone while fading to black. Clips additionally keep real footage before the first word and after the last word while the audio is quiet.">export edges: fade in <input type="number" id="tFadeIn" step="0.1" min="0" max="3" value="0.3"> s · ending hold + fade out <input type="number" id="tTail" step="0.1" min="0" max="5" value="0.8"> s · clips keep <input type="number" id="tStartLead" step="0.1" min="0" max="3" value="0.3"> s before the first word and <input type="number" id="tEndHold" step="0.1" min="0" max="5" value="1.0"> s after the last word</div>
+    <div class="trow adv">fillers: <input type="text" id="tFillers" style="flex:1;min-width:200px" title="comma-separated; matched as whole words (1–2 words)"></div>
+    <div class="trow adv"><button id="tUndo" title="Ctrl+Z">↶ Undo</button><button id="tRedo" title="Ctrl+Shift+Z">↷ Redo</button><button id="tRestoreAll" class="danger">restore all</button><span class="spacer" style="flex:1"></span><button id="tGoCut">next: cut cameras →</button></div>
+    <div class="trow adv">Transcript: <span id="tAsrState">—</span><select id="tModel" title="auto = the largest model this machine can hold (GPU if it has one)"><option value="auto">auto model</option><option>large-v3</option><option>medium</option><option>small</option></select><button id="tTranscribe">Transcribe lecture</button><button id="tTranscribeCancel" class="danger" style="display:none">✕</button></div>
+    <div class="trow"><div id="tProg"><div id="tProgBar"></div></div><span id="tAsrMsg"></span></div>
+    <div class="trow adv" id="tStats"></div>
+    <div class="panel" id="tClipsBox" style="display:flex;flex-direction:column">
+      <h2>Clips — select words in the transcript, then ▣</h2>
+      <div class="trow" style="padding:6px 8px"><button id="tMakeClip" class="primary" title="C — the clip starts at the audible onset of the first selected word and ends at the audible end of the last selected word">▣ Clip from selection</button><button id="tSetStart" title="move the selected clip's start to the first selected word">start ← selection</button><button id="tSetEnd" title="move the selected clip's end to the last selected word">end → selection</button><span class="spacer" style="flex:1"></span><button id="tClearClips" class="danger" title="remove every clip (a checkpoint is saved first, so this can be restored)">✕ clear all clips</button><div id="tClipHint" style="color:var(--muted);width:100%"></div></div>
+      <div class="scroll"><table id="tClipTable"><tbody></tbody></table></div>
+    </div>
+    <div class="panel" id="tTopicsBox" style="display:flex;flex-direction:column">
+      <h2 id="tTopicsHead" style="cursor:pointer" title="click to open / close">▸ Topics — what is talked about where</h2>
+      <div class="settings tpbody" style="display:none">granularity <input type="range" id="pGran" min="0.1" max="1.2" step="0.1" value="0.5" style="width:90px"><span id="pGranV">0.5</span> <label class="chk"><input type="checkbox" id="pLLM" checked> name with AI</label> <span id="pAiState" style="color:var(--muted)" title="set up under Advanced in the Images tab"></span> <button id="pAnalyse">Analyse</button> <span id="pMsg" style="color:var(--muted)"></span></div>
+      <div class="scroll tpbody" id="pList" style="display:none"><p style="padding:8px;color:var(--muted)">No analysis yet.</p></div>
+    </div>
+    <div class="trow" style="color:var(--muted)">How it works: <b>✨ Tighten</b> removes dead air and fillers · select words and press <b>Del</b> to remove anything else · select words and press <b>▣</b> to make a clip · then pick cameras and images for the clip in the next tabs and export. The app makes every cut look natural on its own.</div>
+  </section>
+  <section class="panel" id="tRight">
+    <h2>Transcript — whole lecture</h2>
+    <canvas id="tMini" height="34" title="topics · removed (red) · click to seek"></canvas>
+    <div id="tLegend">click a word = jump there · drag or shift-click = select · <b>Del</b> = remove the selected words · click a struck word = restore · double-click = fix a misheard word · right-click = more<span class="adv"> · <span class="pz">⏸ 1.2s</span> pause token · <b>P</b> shorten pauses · <b>F</b> fillers</span></div>
+    <div id="tText" class="scroll"><p style="color:var(--muted)">Loading…</p></div>
+  </section>
+</main>
+
+<main id="imagesMain" style="display:none;grid-template-columns:minmax(0,1.2fr) minmax(380px,1fr);grid-template-rows:minmax(0,1fr)">
+  <section class="panel" id="bLeft" style="display:flex;flex-direction:column;min-height:0">
+    <div class="settings" style="gap:8px">Clip <select id="bClip"></select> <button id="bSuggest" class="primary">Suggest images</button><span id="bState" style="color:var(--muted)"></span></div>
+    <div class="settings adv" style="gap:6px;flex-wrap:wrap" title="Optional. Topic names and image suggestions use a chat model when one is available; without one the app uses keyword labels and named things from the transcript. Works with the Claude CLI, an Anthropic API key, or any OpenAI-compatible API (xAI Grok, OpenAI, Ollama on this PC...).">🤖 AI assistant <select id="aiProv"><option value="auto">auto-detect</option><option value="none">none (keywords only)</option><option value="claude-cli">Claude CLI</option><option value="anthropic">Anthropic API key</option><option value="openai">OpenAI-compatible (Grok, OpenAI, Ollama…)</option></select> <select id="aiPreset" title="fill in a known service"><option value="">preset…</option><option value="xai">xAI Grok</option><option value="openai">OpenAI</option><option value="ollama">Ollama (local)</option><option value="anthropic">Anthropic</option></select> <input type="text" id="aiUrl" placeholder="base URL" style="width:190px"> <input type="text" id="aiModel" placeholder="model" style="width:130px"> <input type="password" id="aiKey" placeholder="API key (kept on this PC)" style="width:170px"> <button id="aiSave">Save</button> <button id="aiClearKey" title="forget the stored key">forget key</button> <span id="aiState" style="color:var(--muted)"></span></div>
+    <div class="settings adv" style="gap:6px" title="Optional: with an Unsplash access key (unsplash.com/oauth/applications → New Application → Access Key), Unsplash photos are searched first">Unsplash access key <input type="password" id="bUnsplashKey" placeholder="paste Access Key" style="width:220px"><button id="bSaveKey">Save</button><span id="bKeyState" style="color:var(--muted)"></span></div>
+    <div class="settings" style="gap:6px" title="Tell the tool what is being talked about at the current moment and it will look for a picture">🔍 Find an image for <input type="text" id="bQuery" placeholder="e.g. ENIAC" style="width:200px"> at <span id="bAtTc" style="font-family:ui-monospace,monospace;color:var(--text)">—</span> <button id="bFind">Find</button><span id="bFindState" style="color:var(--muted)"></span></div>
+    <div class="scroll" id="bCards" style="flex:1"><p style="padding:10px;color:var(--muted)">Pick a clip.</p></div>
+    <h2>Clip transcript — click a sentence to move the moment</h2>
+    <div class="scroll" id="bTranscript" style="max-height:22vh;flex:0 0 auto"></div>
+  </section>
+  <section class="panel" id="bRight" style="display:flex;flex-direction:column;min-height:0">
+    <h2>Preview — how it will look</h2>
+    <div style="padding:8px"><div style="position:relative;background:#000;border-radius:4px;aspect-ratio:16/9"><canvas id="bPgm" width="960" height="540" style="width:100%;height:100%;display:block"></canvas><div id="bPgmLabel" class="pgmLabel">—</div></div>
+    <div class="trow" style="margin-top:6px"><button id="bPlay" class="primary">▶ Play</button><button id="bLoop" title="play from 2 s before the image to 1.5 s after it, again and again">⟲ Loop around image</button><span id="bTc" style="font:600 14px ui-monospace,monospace;color:var(--text)"></span></div>
+    <div class="trow" style="margin-top:4px"><span id="bScrubL" style="color:var(--muted);font:11px ui-monospace,monospace">before</span><input type="range" id="bScrub" min="0" max="1000" value="0" style="flex:1"><span id="bScrubR" style="color:var(--muted);font:11px ui-monospace,monospace">after</span></div>
+    <div id="bFocusInfo" style="color:var(--muted);font-size:12px;margin-top:2px">click a suggestion's ▶ preview or picture to scrub around it</div></div>
+    <h2>Images used in this clip</h2>
+    <div class="scroll" id="bUsed" style="padding:4px 8px"></div>
+    <div style="padding:8px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id="bExport" class="primary">⬇ Export this clip</button><span id="bExportState" class="status">renders the clip with its camera cuts, framing, tightening and the images above → clips/&lt;name&gt;.mp4 + .txt</span></div>
+    <div id="bProg" style="height:6px;background:#21262d;margin:0 8px 8px;border-radius:3px;overflow:hidden"><div id="bProgBar" style="height:100%;width:0;background:var(--accent)"></div></div>
+  </section>
+</main>
+<div id="modal" style="position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:70"><div class="card" style="background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px 20px;max-width:720px"><div id="modalBody"></div></div></div>
+<div id="toast"></div>
+<div id="ctx"></div>
+<div id="help"><div class="card">
+  <h3 style="margin-top:0">How to use this tool</h3>
+  <div style="margin-bottom:12px;line-height:1.6"><b>1 · Edit words &amp; clips</b>: press <b>✨ Tighten automatically</b>, then select any words you don't want and press <kbd>Del</kbd>. Select the words of a clip and press <b>▣</b>.<br><b>2 · Cameras</b>: pick the clip; angles are pre-filled from where the speaker looks; press <kbd>1</kbd>/<kbd>2</kbd>/<kbd>3</kbd> while it plays to change them; <kbd>Z</kbd> reframes a shot.<br><b>3 · Images</b>: ✓ Use the suggested pictures you like, or type what to look for.<br>Export from any tab. Every cut is made to look natural by the app; tick <b>Advanced</b> in the header to see and tune everything.</div>
+  <div class="cols adv">
+    <div>
+      <b>Cut cameras</b>
+      <div><kbd>1</kbd>–<kbd>9</kbd> cut to camera (snaps to a nearby join)</div>
+      <div><kbd>Space</kbd>/<kbd>K</kbd> play/pause · <kbd>J</kbd>/<kbd>L</kbd> ∓10 s</div>
+      <div><kbd>←</kbd> <kbd>→</kbd> ±1 s · <kbd>Shift</kbd> ±10 s · <kbd>,</kbd> <kbd>.</kbd> frame</div>
+      <div><kbd>[</kbd> <kbd>]</kbd> previous / next cut</div>
+      <div><kbd>S</kbd> snap selected cut to join/pause · <kbd>Del</kbd> remove</div>
+      <div>edit a cut: click its block (or a row in the cut list) → camera / time in the panel above the list, drag its left edge, or right-click the block</div>
+      <div><kbd>I</kbd> <kbd>O</kbd> in/out · <kbd>X</kbd> cut-out range</div>
+      <div><kbd>V</kbd> toggle tightened / master view</div>
+      <div><kbd>Z</kbd> frame the shot (crop box): drag/resize · <kbd>+</kbd><kbd>−</kbd> zoom · arrows nudge · <kbd>0</kbd> reset · <kbd>Esc</kbd> done</div>
+      <div>right-click a join tick: auto / cut / dissolve / hold · joins are measured automatically (dots); ⇄ switches camera at the jerky ones</div>
+    </div>
+    <div>
+      <b>Tighten</b>
+      <div><kbd>Space</kbd> play/pause · <kbd>J</kbd>/<kbd>L</kbd> ∓5 s · arrows ±1 s</div>
+      <div><kbd>Del</kbd> remove selected words · <kbd>Esc</kbd> clear selection</div>
+      <div><kbd>P</kbd> shorten all pauses · <kbd>F</kbd> accept all fillers</div>
+      <div><kbd>C</kbd> clip from the selected words (word-sharp start/end)</div>
+      <div><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Shift+Z</kbd> undo / redo (all tabs)</div>
+      <div><kbd>?</kbd> this help</div>
+    </div>
+  </div>
+  <button id="btnHelpClose">Close</button>
+</div></div>
+
+<script>
+'use strict';
+// ================================================================ shared state
+const S = {
+  layout:null, angles:[], byId:{}, cues:[], dur:0, tab:'tighten', timeMode:'tight',
+  cuts:[], inPt:0, outPt:null, fallback:null, lead:0.4, snapLive:false,
+  skips:[], clips:[], pending:null, selR:null, previewSkips:true,
+  sel:-1, undo:[], redo:[], view:{s:0,e:1}, drag:null, dirty:false,
+  topics:{segments:[],topics:[],recurrences:[]}, map:{ks:[],ke:[],ko:[],TD:0}, fixes:{}, images:[],
+};
+const JD={pauseThreshold:0.7,pauseInSentence:0.30,pauseSentenceEnd:0.55,dissolveFrames:6,holdMs:120,fadeIn:0.3,tailOut:0.8,startLead:0.3,endHold:1.0};
+const T={ words:[], removals:[], corrections:{}, pauseThr:0.7, pauseIn:0.30, pauseEnd:0.55, dissolveFrames:6, holdMs:120, fadeIn:0.3, tailOut:0.8, startLead:0.3, endHold:1.0, joinOverrides:{},
+  fillers:['um','uh','uhm','umm','hmm','er','ah','you know','i mean','sort of','kind of','okay so','right?'],
+  undo:[], redo:[], sel:null, anchor:null, dragging:false, dragMoved:false, covered:false, saveTimer:null, lastWord:-1, loaded:false, pollN:0 };
+const $ = s => document.querySelector(s);
+const mv = $('#mv'), pgm = $('#pgm'), pctx = pgm.getContext('2d'), tl = $('#tl'), tctx = tl.getContext('2d');
+const fmt = (t, frames=true) => { if(!isFinite(t)) t=0; t=Math.max(0,t); const h=Math.floor(t/3600), m=Math.floor(t%3600/60), s=Math.floor(t%60), f=Math.floor((t%1)*25); const p=n=>String(n).padStart(2,'0'); return `${p(h)}:${p(m)}:${p(s)}`+(frames?`.${p(f)}`:''); };
+const toast = (msg, ms=1800) => { const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'), ms); };
+const escapeHtml = s => String(s).replace(/[&<>]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch]));
+const escapeAttr = s => String(s).replace(/[&<>"]/g, ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+const newId = () => 'c_'+Math.random().toString(16).slice(2,8);
+const CLIP_PALETTE=['#d2a8ff','#f778ba','#ff7b72','#ffa657','#e3b341','#56d364','#79c0ff','#a5d6ff','#bc8cff','#ff9bce'];
+function clipColor(c){ if(!c.color){ const used=S.clips.map(x=>x.color).filter(Boolean); c.color=CLIP_PALETTE.find(k=>!used.includes(k))||CLIP_PALETTE[S.clips.indexOf(c)%CLIP_PALETTE.length]; } return c.color; }
+function rgba(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; }
+
+const MOTION_JERKY=0.045;   // measured pose motion across a join: >= this is a visible jump (morph / camera switch)
+// ---- loudness envelope (10 ms, uint8 half-dB) and acoustic edge snapping — twin of envelope.py; keep in sync
+const ENV={u8:null, HOP:0.01, BACK:0.20, FWD:0.10};
+async function loadEnvelope(){ try{ const r=await fetch('/api/envelope'); if(r.ok) ENV.u8=new Uint8Array(await r.arrayBuffer()); }catch(e){} }
+function snapEdge(t, side){ const u8=ENV.u8; if(!u8||!u8.length) return t; const back=side==='a'?ENV.BACK:ENV.FWD, fwd=side==='a'?ENV.FWD:ENV.BACK;
+  const i0=Math.max(0,Math.floor((t-back)/ENV.HOP)), i1=Math.min(u8.length-1,Math.floor((t+fwd)/ENV.HOP)); if(i1<=i0) return t; const ic=Math.floor(t/ENV.HOP)-i0;
+  let best=-1, bs=Infinity; for(let k=0;k<=i1-i0;k++){ const sc=u8[i0+k]*1000+Math.abs(k-ic); if(sc<bs){bs=sc;best=k;} } return +((i0+best)*ENV.HOP).toFixed(3); }
+const START_BIAS=-0.06, END_BIAS=0.09, SNAP_RADIUS=0.12, SNAP_PENALTY=4;   // twin of envelope.py
+function snapBoundary(expected){ const u8=ENV.u8; if(!u8||!u8.length) return +expected.toFixed(3); const i0=Math.max(0,Math.floor((expected-SNAP_RADIUS)/ENV.HOP)), i1=Math.min(u8.length-1,Math.floor((expected+SNAP_RADIUS)/ENV.HOP)); if(i1<=i0) return +expected.toFixed(3); const ic=Math.floor(expected/ENV.HOP);
+  let best=i0, bs=Infinity; for(let k=i0;k<=i1;k++){ const sc=u8[k]+SNAP_PENALTY*Math.abs(k-ic); if(sc<bs){bs=sc;best=k;} } return +(best*ENV.HOP).toFixed(3); }
+const KEEP_MAX=0.35, PAUSE_MIN=0.30, PAUSE_TARGET=0.45;   // natural cut (twin of envelope.py / joins.py)
+function speechThreshold(){ const u8=ENV.u8; if(!u8||!u8.length) return 170; if(ENV.thr!=null && ENV.thrLen===u8.length) return ENV.thr; const arr=Array.from(u8); const sorted=arr.slice().sort((a,b)=>a-b); const med=sorted[Math.floor(sorted.length/2)]; const loud=sorted.filter(v=>v>med); const p95=loud.length?loud[Math.floor(0.95*(loud.length-1))]:200; ENV.thr=p95-30; ENV.thrLen=u8.length; return ENV.thr; }
+function quietExtent(t, dir, maxWin, tol=2){ const u8=ENV.u8; if(!u8||!u8.length) return 0; const thr=speechThreshold(); let i=Math.floor(t/ENV.HOP), k=0, bad=0; const n=u8.length, kmax=Math.floor(maxWin/ENV.HOP); while(k<kmax){ const j=i+(dir>0?k:-k-1); if(j<0||j>=n) break; bad=u8[j]>=thr?bad+1:0; if(bad>=tol){ k-=tol-1; break; } k++; } return Math.max(0,k)*ENV.HOP; }
+function snapBoundaryR(expected, radius, penalty){ const u8=ENV.u8; if(!u8||!u8.length) return +expected.toFixed(3); const i0=Math.max(0,Math.floor((expected-radius)/ENV.HOP)), i1=Math.min(u8.length-1,Math.floor((expected+radius)/ENV.HOP)); if(i1<=i0) return +expected.toFixed(3); const ic=Math.floor(expected/ENV.HOP); let best=i0,bs=Infinity; for(let k=i0;k<=i1;k++){ const sc=u8[k]+penalty*Math.abs(k-ic); if(sc<bs){bs=sc;best=k;} } return +(best*ENV.HOP).toFixed(3); }
+// v3: keep up to KEEP_MAX of the real silence after the previous kept word and before the next kept word; cut inside silence
+function wordEdges(i0,i1){ const w0=T.words[i0], w1=T.words[i1], prev=i0>0?T.words[i0-1]:null, next=i1+1<T.words.length?T.words[i1+1]:null;
+  const w0r=w0.s+START_BIAS, w1r=w1.e+END_BIAS; let a,b,kb=0,ka=0;
+  if(prev){ const pe=prev.e+END_BIAS; if(w0r<=pe+0.02){ a=(pe+w0r)/2; } else { kb=Math.min(KEEP_MAX, quietExtent(pe,+1,w0r-pe)); a=Math.min(pe+kb, w0r-0.01); a=snapBoundaryR(a,0.05,6); a=Math.max(pe-0.02, Math.min(a, w0r-0.01)); kb=Math.max(0,a-pe); } } else { a=Math.max(0,w0r-0.05); }
+  if(next){ const ns=next.s+START_BIAS; if(ns<=w1r+0.02){ b=(w1r+ns)/2; } else { ka=Math.min(KEEP_MAX, quietExtent(ns,-1,ns-w1r)); b=Math.max(ns-ka, w1r+0.01); b=snapBoundaryR(b,0.05,6); b=Math.min(ns+0.02, Math.max(b, w1r+0.01)); ka=Math.max(0,ns-b); } } else { b=w1r+0.05; }
+  return {a:+a.toFixed(3), b:+b.toFixed(3), kept:[+kb.toFixed(3), +ka.toFixed(3)]}; }
+function snapRemovals(rs){ return rs.map(r=>{ if(!['words','filler','pause-fixed'].includes(r.kind)) return r; const inside=[]; for(let i=0;i<T.words.length;i++){ const m=(T.words[i].s+T.words[i].e)/2; if(m>=r.a&&m<r.b) inside.push(i); }
+  if(!inside.length) return r; const e=wordEdges(inside[0],inside[inside.length-1]); return (e.b-e.a>=0.05)?{...r,a:e.a,b:e.b,kept:e.kept}:r; }); }
+const MOTION_MAX=0.10;      // >= this: too far for a morph -> hold + red dot -> switch camera
+// ================================================================ removed union + tightened-time mapping
+function removedUnion(){
+  const rs=[...S.skips.map(r=>[r.a,r.b]), ...T.removals.map(r=>[r.a,r.b])].filter(([a,b])=>b>a).sort((x,y)=>x[0]-y[0]);
+  const out=[]; for(const r of rs){ if(out.length&&r[0]<=out[out.length-1][1]) out[out.length-1][1]=Math.max(out[out.length-1][1],r[1]); else out.push([r[0],r[1]]); } return out;
+}
+function recomputeMap(){
+  const u=removedUnion(), ks=[],ke=[]; let cur=0;
+  for(const [a,b] of u){ if(a>cur){ const e=Math.min(a,S.dur); if(e-cur>=0.15){ ks.push(cur); ke.push(e); } } cur=Math.max(cur,b); }
+  if(cur<S.dur && S.dur-cur>=0.15){ ks.push(cur); ke.push(S.dur); }
+  let js=computeJoins(ks,ke); let moved=0;
+  for(const j of js){ const fx=S.fixes[`${j.lb.toFixed(3)}-${j.ra.toFixed(3)}-${j.camL}-k3`]; if(!fx||fx.kept||j.type==='cut') continue; const lb2=Math.round(+fx.lb2*30)/30, ra2=Math.round(+fx.ra2*30)/30; if(!(ks[j.k]+0.1<lb2&&lb2<ra2&&ra2<ke[j.k+1]-0.1)) continue;
+    ke[j.k]=lb2; ks[j.k+1]=ra2; const ko_=j.ra.toFixed(3), kn=ra2.toFixed(3); if(T.joinOverrides[ko_]&&kn!==ko_){ T.joinOverrides[kn]=T.joinOverrides[ko_]; delete T.joinOverrides[ko_]; } moved++; }
+  if(moved){ js=computeJoins(ks,ke); }
+  js.forEach(j=>{ const k=Object.keys(S.fixes).find(key=>key.endsWith('-'+j.camL+'-k3')&&Math.abs(+S.fixes[key].ra2-j.ra)<0.002&&!S.fixes[key].kept); if(k) j.matched=S.fixes[k]; });
+  S.joins=js; S.moved=moved;
+  const ko=[], add=[]; let off=0;
+  for(let i=0;i<ks.length;i++){ ko.push(off); const a=i<S.joins.length?S.joins[i].add:0; add.push(a); off+=(ke[i]-ks[i])+a; }
+  S.map={ks,ke,ko,add,TD:off};
+}
+// Mirror of joins.join_plan() in Python — keep in sync.
+function computeJoins(ks,ke){
+  const out=[]; const ws=T.words; const bis=x=>{ let lo=0,hi=ws.length; while(lo<hi){ const m=(lo+hi)>>1; if(ws[m].s<x) lo=m+1; else hi=m; } return lo; };
+  const speechIn=(t0,t1)=>{ let i=bis(t0-3.0); while(i<ws.length && ws[i].s<t1){ if(ws[i].e>t0) return true; i++; } return false; };
+  const covers=(id,t0,t1)=>!!S.byId[id]&&S.byId[id].coverage.some(cv=>cv.start<=t0+1e-6&&cv.end>=t1-1e-6);
+  for(let k=0;k<ks.length-1;k++){
+    const lb=ke[k], ra=ks[k+1]; const camL=camAt(lb-1/30)||S.fallback, camR=camAt(ra)||S.fallback;
+    const dEdge=Math.min(T.dissolveFrames/30,(ra-lb)/2); const kind = (speechIn(lb,lb+dEdge)||speechIn(ra-dEdge,ra)) ? 'words' : 'pause';
+    const o=T.joinOverrides[ra.toFixed(3)]||{}; let type=['cut','dissolve','hold','morph'].includes(o.type)?o.type:null;
+    const fxm=Object.keys(S.fixes).find(key=>key.startsWith(`${lb.toFixed(3)}-${ra.toFixed(3)}-${camL}-`)||(key.endsWith('-'+camL+'-k3')&&Math.abs(+S.fixes[key].ra2-ra)<0.002&&!S.fixes[key].kept));
+    const motion = fxm && S.fixes[fxm].method==='pose' && S.fixes[fxm].base!=null ? S.fixes[fxm].base : null;
+    // which kind of removal made this join? word removals follow the natural-cut rule
+    let rkind=null; for(const r of T.removals){ if(r.b>lb-0.02 && r.a<ra+0.02){ if(['words','filler','pause-fixed'].includes(r.kind)){ rkind='words'; break; } rkind='pause'; } }
+    let kept=null, insert=0, switchTo=null;
+    if(rkind==='words' && ENV.u8){ const prevE=Math.max(...T.words.filter(w=>w.e+END_BIAS<=lb+0.01).map(w=>w.e+END_BIAS), lb-KEEP_MAX); const nextS=Math.min(...T.words.filter(w=>w.s+START_BIAS>=ra-0.01).map(w=>w.s+START_BIAS), ra+KEEP_MAX); kept=+(Math.min(KEEP_MAX,quietExtent(lb,-1,Math.max(0,lb-prevE)))+Math.min(KEEP_MAX,quietExtent(ra,+1,Math.max(0,nextS-ra)))).toFixed(3); }
+    if(!type){ if(camL!==camR || (ra-lb)<2/30) type='cut';
+      else if(rkind==='words' && kept!=null){ if(motion!=null && motion>=MOTION_MAX){ const order=[...S.angles.filter(a=>a.id!==camL&&a.id!=='slides').map(a=>a.id), ...S.angles.filter(a=>a.id==='slides'&&a.id!==camL).map(a=>a.id)]; switchTo=order.find(id=>covers(id,ra,Math.min(ke[k+1]||ra+2,ra+2)))||null; }
+        if(kept<PAUSE_MIN){ insert=+(PAUSE_TARGET-kept).toFixed(3); type=kind==='pause'?'dissolve':'hold'; } else if(switchTo){ type='cut'; } else if(motion!=null && motion>=MOTION_JERKY && motion<MOTION_MAX) type='morph'; else { type=kind==='pause'?'dissolve':'hold'; insert=Math.min(6/30,kept/2); } }
+      else if(motion!=null && motion>=MOTION_JERKY && motion<MOTION_MAX) type='morph'; else type = kind==='pause' ? 'dissolve' : (T.holdMs>0?'hold':'cut'); }
+    let frames=0, avail=0;
+    if(type==='morph'){ const base=kind==='pause'?T.dissolveFrames:Math.round(T.holdMs/1000*30); frames=Math.min(o.frames||Math.max(base,4),90); avail=Math.min(frames/30,(ra-lb)/2); if(frames<1) type='cut'; }
+    if(type==='dissolve'){ frames = o.frames ? Math.min(o.frames,90) : (rkind==='words' ? Math.max(0,Math.round(insert*30)) : Math.min(T.dissolveFrames, Math.floor((ra-lb)/2*30))); const d=frames/30; avail=Math.min(d,(ra-lb)/2); if(frames<1 || !(covers(camL,lb,lb+avail)&&covers(camR,ra-avail,ra))){ type=T.holdMs>0?'hold':'cut'; frames=0; } }
+    if(type==='hold'){ frames=Math.min(o.frames||(rkind==='words'?Math.round(insert*30):Math.round(T.holdMs/1000*30)),90); if(frames<1) type='cut'; }
+    if(type==='cut') frames=0;
+    out.push({k,lb,ra,camL,camR,kind,type,frames,add:frames/30,avail,overridden:!!(o.type||o.frames),motion,rkind,kept,switchTo});
+  }
+  return out;
+}
+function toTight(m){ const {ks,ke,ko}=S.map; if(!ks.length) return m; let lo=0,hi=ks.length-1,r=-1; while(lo<=hi){ const mid=(lo+hi)>>1; if(ks[mid]<=m){r=mid;lo=mid+1;} else hi=mid-1; } if(r<0) return 0; return ko[r]+Math.min(m,ke[r])-ks[r]; }
+function toMaster(t){ const {ks,ke,ko,TD}=S.map; if(!ks.length) return t; if(t>=TD) return S.dur; let lo=0,hi=ks.length-1,r=0; while(lo<=hi){ const mid=(lo+hi)>>1; if(ko[mid]<=t){r=mid;lo=mid+1;} else hi=mid-1; } const within=t-ko[r]; if(within>ke[r]-ks[r]) return r+1<ks.length?ks[r+1]:S.dur; return ks[r]+within; }
+const tight = () => S.timeMode==='tight';
+// scope = the clip being worked on in the Cut tab (null = whole lecture); display time starts at 0 at the clip start
+const scopeA = () => S.scope ? S.scope.a : 0;
+const scopeB = () => S.scope ? S.scope.b : S.dur;
+const D = m => (tight()? toTight(m) : m) - (tight()? toTight(scopeA()) : scopeA());          // master -> display time
+const Mm = d => tight()? toMaster(d + toTight(scopeA())) : d + scopeA();                      // display -> master time
+const dispDur = () => tight()? (toTight(scopeB()) - toTight(scopeA())) : (scopeB() - scopeA());
+function joins(){ return (S.joins||[]).map(j=>({t:j.ra, removed:j.ra-j.lb, j})); }
+function joinAt(ra){ return (S.joins||[]).find(j=>Math.abs(j.ra-ra)<0.002)||null; }
+function inRemoved(t){ for(const [a,b] of removedUnion()){ if(t>=a&&t<b) return [a,b]; if(a>t) break; } return null; }
+function nearestJoin(m, tol=0.5){ let best=null, bd=tol; for(const j of joins()){ const d=Math.abs(toTight(j.t)-toTight(m)); if(d<bd){bd=d;best=j.t;} } return best; }
+
+// ================================================================ cut model
+function camIndexAt(t){ let lo=0, hi=S.cuts.length-1, r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(S.cuts[m].t<=t){r=m;lo=m+1;} else hi=m-1; } return r; }
+const camAt = t => { const i=camIndexAt(t); return i<0 ? null : S.cuts[i].cam; };
+function covered(id, t){ const a=S.byId[id]; return !!a && a.coverage.some(c=>t>=c.start && t<c.end); }
+function snapshot(){ return JSON.stringify({cuts:S.cuts, inPt:S.inPt, outPt:S.outPt, skips:S.skips, clips:S.clips, images:S.images}); }
+function pushUndo(){ S.undo.push(snapshot()); if(S.undo.length>300) S.undo.shift(); S.redo.length=0; }
+function restore(json){ const o=JSON.parse(json); S.cuts=o.cuts; S.inPt=o.inPt; S.outPt=o.outPt; S.skips=o.skips||[]; S.clips=o.clips||[]; S.images=o.images||[]; S.sel=-1; S.selR=null; changed(); }
+function undo(){ if(!S.undo.length) return toast('nothing to undo'); S.redo.push(snapshot()); restore(S.undo.pop()); }
+function redo(){ if(!S.redo.length) return toast('nothing to redo'); S.undo.push(snapshot()); restore(S.redo.pop()); }
+function pauseBoundaries(){ if(S._pb) return S._pb; const b=[]; for(const c of S.cues){ b.push(c.start); b.push(c.end); } b.sort((x,y)=>x-y); return S._pb=b; }
+function nearestPause(t, maxDist=1.5){ const b=pauseBoundaries(); let best=null, bd=maxDist; let lo=0, hi=b.length-1; while(lo<hi){ const m=(lo+hi)>>1; if(b[m]<t) lo=m+1; else hi=m; } for(const i of [lo-1, lo, lo+1]){ if(i>=0 && i<b.length){ const d=Math.abs(b[i]-t); if(d<bd){bd=d;best=b[i];} } } return best; }
+function snapAny(t, tolJoin=0.5, tolPause=1.5){ const j=nearestJoin(t,tolJoin); if(j!=null) return j; return nearestPause(t,tolPause); }
+
+function insertCut(t, cam, {live=false}={}){
+  const a=S.byId[cam]; if(!a) return;
+  t=Math.max(0, Math.min(S.dur, t));
+  if(tight()){ const j=nearestJoin(t,0.5); if(j!=null) t=j; else { const r=inRemoved(t); if(r) t=r[1]; } }
+  if(live && S.snapLive && nearestJoin(t,0.5)==null){ const p=nearestPause(t); if(p!=null) t=p; }
+  if(!covered(cam, t)){ toast(`${a.name} has NO SIGNAL at ${fmt(t)}`); return; }
+  pushUndo();
+  const near=S.cuts.findIndex(c=>Math.abs(c.t-t)<0.5);
+  if(near>=0){ if(S.cuts[near].cam!==cam) delete S.cuts[near].crop; S.cuts[near].cam=cam; S.cuts[near].t=t; S.sel=near; }
+  else { const prev=camAt(t); if(prev===cam && camIndexAt(t)>=0){ S.undo.pop(); flash(cam); return; }
+    S.cuts.push({t,cam}); S.cuts.sort((x,y)=>x.t-y.t); S.sel=S.cuts.findIndex(c=>c.t===t&&c.cam===cam); }
+  flash(cam); changed();
+}
+function moveCut(i, t){ const lo=(i>0?S.cuts[i-1].t:0)+0.04, hi=(i<S.cuts.length-1?S.cuts[i+1].t:S.dur)-0.04; S.cuts[i].t=Math.max(lo, Math.min(hi, t)); }
+function reassign(i, cam){ if(i<0||!S.byId[cam]) return; pushUndo(); if(S.cuts[i].cam!==cam && S.cuts[i].crop){ delete S.cuts[i].crop; toast('framing cleared — it belonged to the previous camera'); } S.cuts[i].cam=cam; changed(); placeCropBox(); }
+function deleteCut(i){ if(i<0) return; pushUndo(); S.cuts.splice(i,1); S.sel=-1; changed(); }
+function snapCut(i){ if(i<0) return toast('select a cut first (click a block)'); const p=snapAny(S.cuts[i].t, 2.5, 2.5); if(p==null) return toast('no join or pause within 2.5 s'); pushUndo(); moveCut(i,p); changed(); toast(`snapped to ${fmt(p)}`); }
+function proposeSwitches(ev){
+  const js=joins(); if(!js.length) return toast('no joins yet — remove something in the Tighten tab first');
+  const all=ev&&ev.shiftKey; const haveMotion=(S.joins||[]).some(j=>j.motion!=null);
+  const {ks,ke}=S.map; let n=0, skipped=0; pushUndo();
+  for(let i=1;i<ks.length;i++){
+    const ra=ks[i], rb=ke[i], lb=ke[i-1]; const j=(S.joins||[])[i-1];
+    if(S.cuts.some(c=>Math.abs(c.t-ra)<0.3)) continue;
+    const cl=camAt(lb-0.04)||S.fallback, cr=camAt(ra)||S.fallback; if(cl!==cr) continue;
+    if(!all && haveMotion && j && j.motion!=null && j.motion<MOTION_JERKY){ skipped++; continue; }   // measured as smooth enough: leave it
+    const order=[...S.angles.filter(a=>a.id!==cl&&a.id!=='slides').map(a=>a.id), ...S.angles.filter(a=>a.id==='slides'&&a.id!==cl).map(a=>a.id)];
+    const alt=order.find(id=>S.byId[id].coverage.some(cv=>cv.start<=ra&&cv.end>=Math.min(rb,ra+2)));
+    if(alt){ S.cuts.push({t:ra,cam:alt}); n++; }
+  }
+  S.cuts.sort((x,y)=>x.t-y.t); if(!n){ S.undo.pop(); return toast(skipped?`no jerky joins — ${skipped} joins measured smooth (Shift+click to switch at every join anyway)`:'every join already changes camera', 4000); } changed();
+  toast(`inserted ${n} camera switch${n>1?'es':''} at ${haveMotion&&!all?'jerky':'same-camera'} joins${skipped?` (${skipped} smooth joins left alone; Shift+click for all)`:''} — Ctrl+Z undoes all`, 5000);
+}
+
+let saveTimer=null;
+function changed(){
+  S.dirty=true; setSave('pending','saving…'); clearTimeout(saveTimer); saveTimer=setTimeout(save, 800);
+  try{ localStorage.setItem('multicam:'+S.name, cutsDoc()); }catch(e){}
+  refreshScope(); recomputeMap(); renderCutTable(); renderRangeTables(); buildCutTranscript(); drawTimeline(); updateTc();
+}
+function cutsDoc(){ return JSON.stringify({cuts:S.cuts, in:S.inPt, out:S.outPt, fallback:S.fallback, lead:S.lead, snapLive:S.snapLive, skips:S.skips, clips:S.clips, images:S.images, previewSkips:S.previewSkips}); }
+async function save(){ clearTimeout(saveTimer); saveTimer=null; try{ const r=await fetch('/api/cuts',{method:'PUT',headers:{'Content-Type':'application/json'},body:cutsDoc(),keepalive:true}); if(!r.ok) throw new Error(r.status); S.dirty=false; setSave('ok','all changes saved · '+new Date().toLocaleTimeString()); } catch(e){ setSave('bad','SAVE FAILED — is the server running? (changes kept in this browser)'); } }
+function setSave(cls,msg){ const el=$('#saveState'); el.className='status '+cls; el.textContent=msg; }
+
+// ================================================================ ranges (skips / clips)
+const RANGE_STYLE={skip:{color:'#f85149',label:'cut out'}, clip:{color:'#d2a8ff',label:'clip'}};
+const rangesOf = type => type==='skip' ? S.skips : S.clips;
+function toggleMark(type){
+  if(type==='clip'){ toast('clips are defined by words in the Tighten tab (select words → ▣ Clip from selection)', 3500); return; }
+  const t=mv.currentTime;
+  if(S.pending && S.pending.type===type){
+    const a=Math.min(S.pending.t,t), b=Math.max(S.pending.t,t); S.pending=null;
+    if(b-a<0.2){ toast('range too short — cancelled'); drawTimeline(); return; }
+    pushUndo(); const arr=rangesOf(type); const r={a,b}; if(type==='clip'){ r.name=`Clip ${arr.length+1}`; r.id=newId(); }
+    arr.push(r); arr.sort((x,y)=>x.a-y.a); S.selR={type,i:arr.indexOf(r)}; changed();
+    toast(type==='skip' ? `cut-out ${fmt(a,false)} → ${fmt(b,false)} (${fmt(b-a,false)} removed)` : `clip "${r.name}" ${fmt(a,false)} → ${fmt(b,false)} — rename it in the list`);
+  } else { if(S.pending) toast(`cancelled pending ${RANGE_STYLE[S.pending.type].label} start`); S.pending={type,t}; drawTimeline(); toast(`${RANGE_STYLE[type].label} start at ${fmt(t,false)} — press ${type==='skip'?'X':'C'} again at the end`, 3000); }
+}
+function deleteRange(type,i){ const arr=rangesOf(type); if(i<0||i>=arr.length) return; pushUndo(); arr.splice(i,1); S.selR=null; changed(); }
+function moveRangeEdge(type,i,edge,t){ const r=rangesOf(type)[i]; t=Math.max(0,Math.min(S.dur,t)); if(edge==='a') r.a=Math.min(t,r.b-0.2); else r.b=Math.max(t,r.a+0.2); }
+function renderRangeTables(){
+  for(const type of ['skip','clip']){
+    const tb=document.querySelector(type==='skip'?'#skipTable tbody':'#clipTable tbody'); tb.innerHTML='';
+    rangesOf(type).forEach((r,i)=>{
+      const tr=document.createElement('tr'); if(S.selR&&S.selR.type===type&&S.selR.i===i) tr.className='sel';
+      const keptLen=type==='clip'? Math.max(0,toTight(r.b)-toTight(r.a)) : 0;
+      if(type==='clip' && S.scope && S.scope.id===r.id) tr.className='sel';
+      tr.innerHTML=`<td style="font-family:ui-monospace,monospace;cursor:pointer;white-space:nowrap" title="${type==='clip'?'work on this clip':'go to start'}">${fmt(r.a,false)}<br>${fmt(r.b,false)}</td>`+
+        (type==='clip' ? `<td style="cursor:pointer"><b>${escapeHtml(r.name||'')}</b><div style="color:var(--muted);font-size:11px">${fmt(keptLen,false)} after tightening · ${S.cuts.filter(c=>c.t>=r.a&&c.t<r.b).length} cuts</div></td>` : `<td style="color:var(--muted)">${fmt(r.b-r.a,false)} removed</td>`)+
+        `<td style="white-space:nowrap">${type==='clip'?'<button class="mini" title="export this clip">⬇</button>':'<button class="mini danger" title="remove">✕</button>'}</td>`;
+      if(type==='clip'){ tr.children[0].onclick=tr.children[1].onclick=()=>{ setScope(S.scope&&S.scope.id===r.id?null:r.id); }; tr.querySelector('button').onclick=()=>{ $('#exportTarget').value='clip:'+i; startRender(); }; }
+      else { tr.children[0].onclick=()=>{ S.selR={type,i}; seek(r.a); renderRangeTables(); drawTimeline(); }; tr.querySelector('button').onclick=()=>deleteRange(type,i); }
+      tb.appendChild(tr);
+    });
+  }
+  const sel=$('#exportTarget'), cur=sel.value; sel.innerHTML='<option value="full">Full video</option>'+S.clips.map((c,i)=>`<option value="clip:${i}">Clip: ${escapeHtml(c.name||('Clip '+(i+1)))}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)) sel.value=cur; updateExportLabel(); fillScopeSel(); tRenderClips();
+}
+function updateExportLabel(){ const v=$('#exportTarget').value; const c=v.startsWith('clip:')?S.clips[parseInt(v.slice(5))]:null; $('#btnRender').textContent=c?`⬇ Export clip "${c.name||'clip'}"`:'⬇ Export full video'; }
+
+// ================================================================ tiles + program
+function flash(cam){ const el=document.querySelector(`.tile[data-id="${cam}"]`); if(el){ el.style.transform='scale(.97)'; setTimeout(()=>el.style.transform='',120);} }
+function buildTiles(){
+  const box=$('#tiles'); box.innerHTML=''; const L=S.layout;
+  for(const a of S.angles){ const d=document.createElement('div'); d.className='tile'; d.dataset.id=a.id; d.style.setProperty('--tc',a.color);
+    d.style.left=(a.x/L.width*100)+'%'; d.style.top=(a.y/L.height*100)+'%'; d.style.width=(a.w/L.width*100)+'%'; d.style.height=(a.h/L.height*100)+'%';
+    d.innerHTML=`<div class="lbl"><span class="key">${a.key}</span><span>${a.name}</span></div><div class="ns">NO SIGNAL</div>`; d.onclick=()=>cutNow(a.id); box.appendChild(d); }
+  $('#mvFrame').style.aspectRatio=`${L.width}/${L.height}`; fitMv();
+}
+function fitMv(){ const box=$('#mvBox'), L=S.layout; if(!L) return; const bw=box.clientWidth-12, bh=box.clientHeight-12, ar=L.width/L.height; let w=bw, h=w/ar; if(h>bh){ h=bh; w=h*ar; } const f=$('#mvFrame'); f.style.width=w+'px'; f.style.height=h+'px';
+  const pw=$('#pgmWrap'); const cw=pw.clientWidth-12, ch=pw.clientHeight-12; let w2=cw, h2=w2*9/16; if(h2>ch){h2=ch; w2=h2*16/9;} pgm.style.width=w2+'px'; pgm.style.height=h2+'px'; }
+function updateTiles(t){ const cur=camAt(t); for(const el of document.querySelectorAll('.tile')){ const a=S.byId[el.dataset.id]; const avail=!S.scope || a.coverage.some(cv=>cv.end>S.scope.a&&cv.start<S.scope.b);
+    el.classList.toggle('unavail', !avail); el.querySelector('.ns').textContent = avail ? 'NO SIGNAL' : 'NOT RECORDED DURING THIS CLIP';
+    el.classList.toggle('active', a.id===cur); el.classList.toggle('nosignal', !covered(a.id,t)); } }
+function cutNow(cam){ const live=!mv.paused; insertCut(live ? mv.currentTime - S.lead : mv.currentTime, cam, {live}); }
+const BL={active:null, canvas:document.createElement('canvas')};
+function jumpOver(range){ // playback reached a removed range [a,b): jump to b; if the join adds a micro pause, pause for it while blending the last frame into the new one
+  const j=joinAt(range[1]); const src=S.tab==='tighten'?$('#tPgm'):pgm;
+  if(j && j.add>0 && !BL.active){ BL.canvas.width=src.width; BL.canvas.height=src.height; BL.canvas.getContext('2d').drawImage(src,0,0); BL.active={t0:performance.now(), ms:j.add*1000, type:j.type}; mv.pause(); mv.currentTime=range[1];
+    setTimeout(()=>{ BL.active=null; if(S.autoPausedFor===j.ra){ S.autoPausedFor=null; mv.play(); } }, j.add*1000+40); S.autoPausedFor=j.ra; }
+  else mv.currentTime=range[1];
+}
+function cropAt(t){ const i=camIndexAt(t); return i<0?null:(S.cuts[i].crop||null); }
+const IMGC={};
+function imgEl(src){ if(!IMGC[src]){ const im=new Image(); im.src='/media/broll/'+src; IMGC[src]=im; } return IMGC[src]; }
+function imageAt(t){ return S.images.find(im=>t>=im.a&&t<im.b)||null; }
+function drawImageOverlay(cx, canvas, im, t){ const el=imgEl(im.src); if(!el.complete||!el.naturalWidth) return false; const W=canvas.width, H=canvas.height;
+  if((im.mode||'full')==='full'){ const zf=(im.zoom==null?1.08:im.zoom); const z=1+(zf-1)*Math.max(0,Math.min(1,(t-im.a)/Math.max(1e-6,im.b-im.a))); const ar=el.naturalWidth/el.naturalHeight; let sw,sh; if(ar>W/H){ sh=el.naturalHeight/z; sw=sh*W/H; } else { sw=el.naturalWidth/z; sh=sw*H/W; } cx.drawImage(el,(el.naturalWidth-sw)/2,(el.naturalHeight-sh)/2,sw,sh,0,0,W,H); }
+  else { const w=W*(im.size||0.35), h=w*el.naturalHeight/el.naturalWidth, m=40*W/1920; const pos=im.pos||'tr'; const x=pos.endsWith('l')?m:W-w-m, y=pos.startsWith('t')?m:H-h-m; cx.fillStyle='#fff'; cx.fillRect(x-3,y-3,w+6,h+6); cx.drawImage(el,x,y,w,h); }
+  if(im.credit){ cx.font=`${Math.round(13*W/960)}px system-ui`; const tw=cx.measureText(im.credit).width; cx.fillStyle='rgba(0,0,0,.45)'; cx.fillRect(W-tw-16*W/960-8, H-24*H/540-6, tw+16, 24*H/540); cx.fillStyle='rgba(255,255,255,.9)'; cx.textBaseline='middle'; cx.fillText(im.credit, W-tw-8*W/960-4, H-12*H/540-6); cx.textBaseline='alphabetic'; }
+  return true; }
+function drawProgramTo(canvas, label, t){
+  const cam=camAt(t), a=cam?S.byId[cam]:null, cx=canvas.getContext('2d'); cx.fillStyle='#000'; cx.fillRect(0,0,canvas.width,canvas.height);
+  const cr=(canvas===pgm && S.cropEdit)?null:cropAt(t);
+  const imOv=(canvas===pgm && S.cropEdit)?null:imageAt(t);
+  if(a && mv.readyState>=2){ try{ if(cr && cr.w<0.999){ cx.drawImage(mv, a.x+cr.x*a.w, a.y+cr.y*a.h, cr.w*a.w, cr.w*a.h, 0,0,canvas.width,canvas.height); } else cx.drawImage(mv, a.x,a.y,a.w,a.h, 0,0,canvas.width,canvas.height); }catch(e){} label.textContent=a.name+(cr&&cr.w<0.999?` · ${(1/cr.w).toFixed(2)}×`:''); label.style.background=a.color;
+    if(imOv){ drawImageOverlay(cx,canvas,imOv,t); label.textContent=(imOv.mode==='pip'?a.name+' + image':'image')+` · ${imOv.query||''}`; }
+    if(BL.active){ const k=Math.min(1,(performance.now()-BL.active.t0)/BL.active.ms); cx.globalAlpha=1-k; try{ cx.drawImage(BL.canvas,0,0,canvas.width,canvas.height); }catch(e){} cx.globalAlpha=1; label.textContent=a.name+(BL.active.type==='dissolve'?' · dissolve':BL.active.type==='morph'?' · morph (preview shows a blend)':' · hold'); }
+    if(!covered(a.id,t)){ cx.fillStyle='rgba(0,0,0,.6)'; cx.fillRect(0,0,canvas.width,canvas.height); cx.fillStyle='#f85149'; cx.font='bold 22px system-ui'; cx.textAlign='center'; cx.fillText('NO SIGNAL — render will use fallback', canvas.width/2, canvas.height/2); } }
+  else { label.textContent=cam?cam:'no cut yet — press a camera key'; label.style.background='#666'; }
+}
+
+// ================================================================ timeline (Cut tab)
+const ROW={ruler:[0,18], cuts:[20,54], joins:[56,68], skip:[70,84], clip:[86,100], topics:[102,116], images:[118,130], cov0:134, covH:11};
+function tlHeight(){ return ROW.cov0 + S.angles.length*(ROW.covH+2) + 14 + 6; }
+const x2t = x => S.view.s + x/tl.clientWidth*(S.view.e-S.view.s);
+const t2x = t => (t-S.view.s)/(S.view.e-S.view.s)*tl.clientWidth;
+const X = m => t2x(D(m));            // master time -> pixel
+const MX = x => Mm(x2t(x));          // pixel -> master time
+function drawTimeline(){
+  const W=tl.clientWidth, H=tlHeight(), dpr=devicePixelRatio||1;
+  if(tl.width!==Math.round(W*dpr)||tl.height!==Math.round(H*dpr)){ tl.width=Math.round(W*dpr); tl.height=Math.round(H*dpr); tl.style.height=H+'px'; }
+  const c=tctx; c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,W,H); c.fillStyle='#0d1117'; c.fillRect(0,0,W,H);
+  const span=S.view.e-S.view.s;
+  const steps=[1,2,5,10,15,30,60,120,300,600,900,1800]; let step=steps.find(s=>W/(span/s)>=70)||3600;
+  c.fillStyle='#8b949e'; c.font='10px ui-monospace,monospace'; c.textBaseline='top';
+  for(let t=Math.ceil(S.view.s/step)*step; t<=S.view.e; t+=step){ const x=t2x(t); c.fillRect(x,ROW.ruler[1]-6,1,6); c.fillText(fmt(t,false),x+3,2); }
+  c.fillStyle=tight()?'#3fb950':'#8b949e'; c.font='bold 10px system-ui'; c.fillText(tight()?'TIGHTENED TIME':'MASTER TIME', W-100, 3);
+  c.fillStyle='rgba(0,0,0,.55)'; if(S.inPt>0) c.fillRect(0,ROW.cuts[0],X(S.inPt),H-ROW.cuts[0]); if(S.outPt!=null) c.fillRect(X(S.outPt),ROW.cuts[0],W,H-ROW.cuts[0]);
+  // cuts
+  const [cy0,cy1]=ROW.cuts, ch=cy1-cy0; c.fillStyle='#21262d'; c.fillRect(0,cy0,W,ch);
+  for(let i=0;i<S.cuts.length;i++){ const a=S.cuts[i], b=i+1<S.cuts.length?S.cuts[i+1].t:S.dur, ang=S.byId[a.cam]; const x0=Math.max(0,X(a.t)), x1=Math.min(W,X(b)); if(x1<0||x0>W) continue;
+    c.fillStyle=ang?ang.color:'#666'; c.globalAlpha=(i===S.sel)?1:.75; c.fillRect(x0,cy0+2,Math.max(1,x1-x0),ch-4); c.globalAlpha=1;
+    if(x1-x0>34){ c.fillStyle='#000'; c.font='bold 11px system-ui'; c.textBaseline='middle'; c.fillText((a.crop?'⤢ ':'')+(ang?ang.name:a.cam)+(a.crop?` ${(1/a.crop.w).toFixed(1)}×`:''), x0+5, cy0+ch/2, x1-x0-8); }
+    if(i===S.sel){ c.strokeStyle='#fff'; c.lineWidth=2; c.strokeRect(x0+1,cy0+1,x1-x0-2,ch-2); } c.fillStyle='#fff'; c.fillRect(X(a.t)-1,cy0,2,ch); }
+  if(!tight()){ c.fillStyle='rgba(13,17,23,.6)'; for(const [a,b] of removedUnion()){ const x0=Math.max(0,X(a)), x1=Math.min(W,X(b)); if(x1>x0) c.fillRect(x0,cy0,x1-x0,ch); } }
+  // joins row
+  { const [y0,y1]=ROW.joins; c.fillStyle='#161b22'; c.fillRect(0,y0,W,y1-y0); c.font='10px system-ui'; c.textBaseline='middle'; c.fillStyle='#8b949e'; c.fillText('joins', 4, (y0+y1)/2);
+    if(tight()){ for(const {t,removed,j} of joins()){ const x=X(t); if(x<-40||x>W+40) continue; const col=j.type==='cut'?'#e3b341':(j.type==='dissolve'?'#79c0ff':j.type==='morph'?'#56d364':'#d2a8ff');
+        if(j.add>0){ const x0=t2x(toTight(j.lb)), x1=X(t); c.fillStyle=col; c.globalAlpha=.35; c.fillRect(x0,ROW.cuts[0],Math.max(2,x1-x0),ROW.cuts[1]-ROW.cuts[0]); c.globalAlpha=1; }
+        c.fillStyle=col; c.fillRect(x-1,y0,2,y1-y0); c.globalAlpha=.4; c.fillRect(x-1,ROW.cuts[0],2,ROW.cuts[1]-ROW.cuts[0]); c.globalAlpha=1;
+        if(j.motion!=null && j.type!=='cut'){ c.fillStyle=j.motion>=0.08?'#f85149':j.motion>=0.045?'#e3b341':'#3fb950'; c.beginPath(); c.arc(x,y0-3,3,0,Math.PI*2); c.fill(); }
+        if(span<1500){ c.fillStyle=col; c.font=(j.overridden?'bold ':'')+'10px system-ui'; c.fillText((j.matched?'◎ ':'')+(j.type==='dissolve'?'⟋ ':j.type==='hold'?'▮ ':j.type==='morph'?'≈ ':'| ')+(j.add>0?`+${j.add.toFixed(2)}s`:`−${removed.toFixed(1)}s`), x+3, (y0+y1)/2); } } } }
+  // skip + clip rows
+  for(const type of ['skip','clip']){ const [y0,y1]=ROW[type], st=RANGE_STYLE[type]; c.fillStyle='#161b22'; c.fillRect(0,y0,W,y1-y0); c.fillStyle='#8b949e'; c.font='10px system-ui'; c.textBaseline='middle'; c.fillText(type==='skip'?'✂ cut out':'▣ clips', 4, (y0+y1)/2);
+    rangesOf(type).forEach((r,i)=>{ const x0=X(r.a), x1=Math.max(X(r.b), X(r.a)+2); if(x1<0||x0>W) return; const seld=S.selR&&S.selR.type===type&&S.selR.i===i;
+      c.fillStyle=type==='clip'?clipColor(r):st.color; c.globalAlpha=seld||(type==='clip'&&S.scope&&S.scope.id===r.id)?.9:.5; c.fillRect(Math.max(0,x0),y0+1,Math.min(W,x1)-Math.max(0,x0),y1-y0-2); c.globalAlpha=1;
+      if(x1-x0>30){ c.fillStyle='#000'; c.font='bold 10px system-ui'; c.fillText(type==='clip'?(r.name||'clip'):'cut out', Math.max(0,x0)+4, (y0+y1)/2, x1-x0-8); }
+      if(seld){ c.strokeStyle='#fff'; c.lineWidth=1.5; c.strokeRect(x0+.5,y0+.5,x1-x0-1,y1-y0-1); } }); }
+  if(S.pending){ const x=X(S.pending.t), st=RANGE_STYLE[S.pending.type]; c.setLineDash([4,3]); c.strokeStyle=st.color; c.lineWidth=2; c.beginPath(); c.moveTo(x,ROW.cuts[0]); c.lineTo(x,H); c.stroke(); c.setLineDash([]); c.fillStyle=st.color; c.font='bold 10px system-ui'; c.textBaseline='top'; c.fillText(`${st.label} start… press ${S.pending.type==='skip'?'X':'C'} at end`, x+4, ROW.ruler[1]+2); }
+  // topics row
+  { const [y0,y1]=ROW.topics; c.fillStyle='#161b22'; c.fillRect(0,y0,W,y1-y0); c.fillStyle='#8b949e'; c.font='10px system-ui'; c.textBaseline='middle'; c.fillText('topics', 4, (y0+y1)/2);
+    for(const sg of S.topics.segments){ const tp=S.topics.topics[sg.topic]; const x0=X(sg.a), x1=X(sg.b); if(x1<0||x0>W) continue; c.fillStyle=tp?tp.color:'#666'; c.globalAlpha=.7; c.fillRect(Math.max(0,x0)+1,y0+1,Math.max(1,Math.min(W,x1)-Math.max(0,x0)-2),y1-y0-2); c.globalAlpha=1; if(x1-x0>60&&tp){ c.fillStyle='#000'; c.font='bold 10px system-ui'; c.fillText(tp.label, Math.max(0,x0)+5, (y0+y1)/2, x1-x0-10); } } }
+  // images row
+  { const [y0,y1]=ROW.images; c.fillStyle='#161b22'; c.fillRect(0,y0,W,y1-y0); c.fillStyle='#8b949e'; c.font='10px system-ui'; c.textBaseline='middle'; c.fillText('🖼 images', 4, (y0+y1)/2);
+    for(const im of S.images){ const x0=X(im.a), x1=X(im.b); if(x1<0||x0>W) continue; c.fillStyle='#e3b341'; c.globalAlpha=.8; c.fillRect(Math.max(0,x0),y0+1,Math.max(2,Math.min(W,x1)-Math.max(0,x0)),y1-y0-2); c.globalAlpha=1; if(x1-x0>40){ c.fillStyle='#000'; c.font='bold 10px system-ui'; c.fillText((im.mode==='pip'?'PiP ':'')+(im.query||'image'), Math.max(0,x0)+4, (y0+y1)/2, x1-x0-8); } } }
+  // coverage rows
+  c.font='10px system-ui'; c.textBaseline='middle';
+  S.angles.forEach((a,i)=>{ const y=ROW.cov0+i*(ROW.covH+2); c.fillStyle='#161b22'; c.fillRect(0,y,W,ROW.covH); c.fillStyle=a.color; c.globalAlpha=.55;
+    for(const cv of a.coverage){ const x0=X(cv.start), x1=X(cv.end); if(x1<0||x0>W||x1<=x0) continue; c.fillRect(Math.max(0,x0),y,Math.min(W,x1)-Math.max(0,x0),ROW.covH); } c.globalAlpha=1; c.fillStyle='#e6edf3'; c.fillText(`${a.key} ${a.name}`, 4, y+ROW.covH/2); });
+  const cyT=ROW.cov0+S.angles.length*(ROW.covH+2)+2; c.fillStyle='#8b949e'; c.globalAlpha=.7;
+  if(span<2400) for(const cue of S.cues){ const x=X(cue.start); if(x<0||x>W) continue; c.fillRect(x,cyT,1,10); } c.globalAlpha=1; c.fillStyle='#8b949e'; c.fillText('pauses', 4, cyT+6);
+  const px=X(mv.currentTime); c.fillStyle='#ff4d4d'; c.fillRect(px-1,0,2,H); c.beginPath(); c.moveTo(px-6,0); c.lineTo(px+6,0); c.lineTo(px,8); c.fill();
+}
+function hitCut(x,y){ if(y<ROW.cuts[0]-4||y>ROW.cuts[1]+4) return -1; let best=-1, bd=7; S.cuts.forEach((c,i)=>{ const d=Math.abs(X(c.t)-x); if(d<bd){bd=d;best=i;} }); return best; }
+function rowType(y){ for(const type of ['skip','clip']){ if(y>=ROW[type][0]&&y<=ROW[type][1]) return type; } return null; }
+function hitRangeEdge(x,y){ const type=rowType(y); if(!type) return null; let best=null, bd=6; rangesOf(type).forEach((r,i)=>{ for(const edge of ['a','b']){ const d=Math.abs(X(r[edge])-x); if(d<bd){bd=d;best={type,i,edge};} } }); return best; }
+function rangeAt(type,t){ return rangesOf(type).findIndex(r=>t>=r.a&&t<=r.b); }
+function hitJoin(x,y){ if(!tight()||y<ROW.joins[0]-2||y>ROW.joins[1]+2) return null; let best=null,bd=8; for(const j of (S.joins||[])){ const d=Math.abs(X(j.ra)-x); if(d<bd){bd=d;best=j;} } return best; }
+function setJoinOverride(j,type,frames){ const key=j.ra.toFixed(3);
+  if(type==='auto'){ delete T.joinOverrides[key]; }
+  else if(type==='pause'){ // keep the join's transition style, set its length; a camera-change join gets a dissolve when the edges are silent, else a hold
+    const base=(j.type!=='cut')?j.type:(j.kind==='pause'?'dissolve':'hold'); T.joinOverrides[key]={type:base,frames}; }
+  else T.joinOverrides[key]={type};
+  tChanged(); const jj=joinAt(j.ra); toast(type==='auto'?'join back to automatic':`join at ${fmt(j.ra,false)} → ${jj?jj.type:type}${jj&&jj.add?` (${jj.add.toFixed(2)} s pause)`:''}`); }
+function joinMenuHtml(j){ const cur=(t)=>t===j.type?(j.overridden?'◉ ':'● '):'○ ';
+  return ['auto','cut','dissolve','hold','morph'].map(t=>`<div data-jt="${t}">${t==='auto'?(j.overridden?'○ ':'● '):cur(t)}${t}${t==='dissolve'?` (${T.dissolveFrames} frames from the removed footage)`:t==='hold'?` (${T.holdMs} ms held frame)`:t==='morph'?' (optical-flow warp between the two frames)':t==='auto'?' (rule-based)':''}</div>`).join('')
+    + `<div style="border-top:1px solid var(--line);margin:3px 0;padding:0"></div>` + [0.25,0.5,0.75,1.0].map(sec=>`<div data-jp="${Math.round(sec*30)}">${Math.abs(j.add-sec)<0.02?'● ':'○ '}pause ${sec.toFixed(2)} s</div>`).join(''); }
+function bindJoinMenu(m,j){ m.onclick=ev=>{ const d=ev.target.closest('div[data-jt],div[data-jp]'); m.style.display='none'; if(!d) return; if(d.dataset.jt) setJoinOverride(j,d.dataset.jt); else setJoinOverride(j,'pause',parseInt(d.dataset.jp)); }; }
+tl.addEventListener('mousedown', e=>{
+  if(e.button!==0) return; const r=tl.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+  const hc=hitCut(x,y); if(hc>=0){ pushUndo(); S.drag={type:'cut',i:hc}; S.sel=hc; tl.style.cursor='ew-resize'; drawTimeline(); return; }
+  const he=hitRangeEdge(x,y); if(he){ pushUndo(); S.drag={type:'edge',rtype:he.type,i:he.i,edge:he.edge}; S.selR={type:he.type,i:he.i}; drawTimeline(); renderRangeTables(); return; }
+  const t=MX(x), rt=rowType(y);
+  if(rt){ const i=rangeAt(rt,t); S.selR = i>=0 ? {type:rt,i} : null; renderRangeTables(); }
+  else if(y>=ROW.cuts[0]&&y<=ROW.cuts[1]){ S.sel=camIndexAt(t); S.selR=null; renderRangeTables(); }
+  if(y>=ROW.topics[0]&&y<=ROW.topics[1]){ const sg=S.topics.segments.find(s=>t>=s.a&&t<s.b); if(sg) toast(`${(S.topics.topics[sg.topic]||{}).label||'topic'}: ${sg.preview}`, 3500); }
+  seek(t); S.drag={type:'scrub'}; drawTimeline(); renderCutTable();
+});
+window.addEventListener('mousemove', e=>{
+  const r=tl.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+  if(S.drag){ let t=MX(Math.max(0,Math.min(tl.clientWidth,x)));
+    if(e.shiftKey && S.drag.type!=='scrub'){ const p=snapAny(t,0.8,1.5); if(p!=null) t=p; }
+    if(S.drag.type==='cut'){ moveCut(S.drag.i,t); drawTimeline(); } else if(S.drag.type==='edge'){ moveRangeEdge(S.drag.rtype,S.drag.i,S.drag.edge,t); drawTimeline(); } else seek(t); return; }
+  if(e.target===tl){ tl.style.cursor = (hitCut(x,y)>=0||hitRangeEdge(x,y)) ? 'ew-resize' : 'crosshair';
+    const hj=hitJoin(x,y); tl.title = hj ? `join at ${fmt(hj.ra,false)}: ${hj.kind==='pause'?'pause':'words'} removed (${(hj.ra-hj.lb).toFixed(2)}s), ${S.byId[hj.camL]?S.byId[hj.camL].name:hj.camL} → ${S.byId[hj.camR]?S.byId[hj.camR].name:hj.camR} → ${hj.type}${hj.add?` +${hj.add.toFixed(2)}s`:''}${hj.overridden?' (manual)':''}${hj.matched?` · ◎ pose-matched (motion −${Math.round(hj.matched.gain*100)}%)`:''}${hj.motion!=null?` · motion across join ${hj.motion.toFixed(3)} (${hj.motion>=0.08?'JERKY — switch camera':hj.motion>=0.045?'visible':'fine'})`:''} · right-click to change` : ''; }
+});
+window.addEventListener('mouseup', ()=>{ if(S.drag&&(S.drag.type==='cut'||S.drag.type==='edge')){ if(S.drag.type==='edge') rangesOf(S.drag.rtype).sort((x,y)=>x.a-y.a); changed(); } S.drag=null; });
+tl.addEventListener('wheel', e=>{ e.preventDefault(); const r=tl.getBoundingClientRect(), x=e.clientX-r.left; const span=S.view.e-S.view.s;
+  if(e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)){ const d=(e.deltaX||e.deltaY)/tl.clientWidth*span; setView(S.view.s+d,S.view.e+d); } else { const f=e.deltaY>0?1.25:0.8, t=x2t(x); setView(t-(t-S.view.s)*f, t+(S.view.e-t)*f); } },{passive:false});
+function setView(s,e){ const dd=dispDur(); const span=Math.max(5,Math.min(dd,e-s)); s=Math.max(0,Math.min(dd-span,s)); S.view={s,e:s+span}; drawTimeline(); }
+tl.addEventListener('contextmenu', e=>{
+  e.preventDefault(); const r=tl.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top; const rt=rowType(y);
+  const hj=hitJoin(x,y);
+  if(hj){ const m=$('#ctx'); m.innerHTML=joinMenuHtml(hj); m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; bindJoinMenu(m,hj); return; }
+  if(rt){ const ri=rangeAt(rt,MX(x)); if(ri<0) return; S.selR={type:rt,i:ri}; drawTimeline(); renderRangeTables();
+    const m=$('#ctx'); m.innerHTML=(rt==='clip'?`<div data-act="export">⬇ export this clip</div><div data-act="rename">rename</div>`:'')+`<div data-act="goto">go to start</div><div data-act="del" style="color:#f85149">Del · remove range</div>`;
+    m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+    m.onclick=ev=>{ const d=ev.target.closest('div[data-act]'); m.style.display='none'; if(!d) return; const rr=rangesOf(rt)[ri];
+      if(d.dataset.act==='del') deleteRange(rt,ri); else if(d.dataset.act==='goto') seek(rr.a); else if(d.dataset.act==='rename'){ const n=prompt('Clip name', rr.name||''); if(n!=null){ pushUndo(); rr.name=n.trim()||rr.name; changed(); } } else if(d.dataset.act==='export'){ $('#exportTarget').value='clip:'+ri; startRender(); } }; return; }
+  if(y<ROW.cuts[0]||y>ROW.cuts[1]) return; const i=camIndexAt(MX(x)); if(i<0) return; S.sel=i; drawTimeline();
+  const m=$('#ctx'); m.innerHTML=S.angles.map(a=>`<div data-cam="${a.id}"><span class="sw" style="display:inline-block;width:10px;height:10px;background:${a.color};border-radius:2px"></span>${a.key} ${a.name}</div>`).join('')+`<div data-act="snap">S · snap to join/pause</div><div data-act="del" style="color:#f85149">Del · remove cut</div>`;
+  m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+  m.onclick=ev=>{ const d=ev.target.closest('div[data-cam],div[data-act]'); m.style.display='none'; if(!d) return; if(d.dataset.cam) reassign(i,d.dataset.cam); else if(d.dataset.act==='snap') snapCut(i); else deleteCut(i); };
+});
+document.addEventListener('mousedown', e=>{ if(!e.target.closest('#ctx')) $('#ctx').style.display='none'; });
+
+// ================================================================ Zoom-cue transcript + cut table (Cut tab)
+function buildTranscript(){ buildCutTranscript(); }
+function buildCutTranscript(){ const box=$('#transcript'); box.innerHTML='';
+  const a=S.scope?S.scope.a:0, b=S.scope?S.scope.b:S.dur; let items=[];
+  if(T.words.length){ let cur=null; for(const w of T.words){ if(w.s<a||w.s>=b) continue; if(!cur||(w.s-cur.end>1.0)||/[.?!]$/.test(cur.last)||cur.n>=28){ cur={start:w.s,end:w.e,text:'',n:0,last:''}; items.push(cur); } cur.text+=(cur.text?' ':'')+(T.corrections[tKey(w)]||w.t); cur.end=w.e; cur.last=w.t; cur.n++; } }
+  else items=S.cues.filter(c=>c.start>=a&&c.start<b).map(c=>({start:c.start,end:c.end,text:c.text}));
+  S.cutItems=items; $('#transcriptHead').textContent=S.scope?`Transcript — clip "${S.scope.name}"`:(T.words.length?'Transcript (words)':'Transcript (Zoom cues)');
+  items.forEach((c,i)=>{ const d=document.createElement('div'); d.className='cue'; d.dataset.i=i; const mid=(c.start+c.end)/2; const cl=S.clips.find(k=>mid>=k.a&&mid<k.b);
+    const first=cl && !(i>0 && items[i-1] && ((items[i-1].start+items[i-1].end)/2>=cl.a));
+    d.innerHTML=`<span class="t">${fmt(Math.max(0,D(c.start)),false)}</span>${cl&&first?`<span class="clipchip" style="background:${clipColor(cl)};margin-right:6px" title="clip">▣ ${escapeHtml(cl.name)}</span>`:''}<span class="${cl?'cliptext':''}"${cl?` style="background:${rgba(clipColor(cl),S.scope&&S.scope.id===cl.id?.45:.3)};color:#fff;border-radius:2px;padding:0 3px"`:''}>${escapeHtml(c.text)}</span>`;
+    d.onclick=()=>seek(c.start); box.appendChild(d); });
+  lastCue=-1; paintTranscriptColors(); }
+function paintTranscriptColors(){ const els=$('#transcript').children; const items=S.cutItems||[]; const u=removedUnion(); for(let i=0;i<els.length&&i<items.length;i++){ const cam=camAt(items[i].start); els[i].style.borderLeftColor=cam?S.byId[cam].color:'#333'; const rm=u.some(([a,b])=>items[i].start>=a&&items[i].start<b); els[i].style.opacity=rm?.35:1; } }
+let lastCue=-1;
+function updateTranscript(t){ const items=S.cutItems||[]; let lo=0,hi=items.length-1,r=-1; while(lo<=hi){const m=(lo+hi)>>1; if(items[m].start<=t){r=m;lo=m+1;} else hi=m-1;} if(r===lastCue) return; const els=$('#transcript').children; if(lastCue>=0&&els[lastCue]) els[lastCue].classList.remove('cur'); if(r>=0&&els[r]){ els[r].classList.add('cur'); if($('#follow').checked) els[r].scrollIntoView({block:'center'}); } lastCue=r; }
+function renderCutTable(){
+  const inScope=i=>!S.scope || (S.cuts[i].t>=S.scope.a && S.cuts[i].t<S.scope.b);
+  const n=S.cuts.filter((c,i)=>inScope(i)).length; $('#cutCount').textContent=S.scope?`(${n} in this clip)`:`(${S.cuts.length})`; const tb=$('#cutTable tbody'); tb.innerHTML='';
+  if(S.scope){ const cam0=camAt(S.scope.a); const a0=cam0?S.byId[cam0]:null; const tr=document.createElement('tr'); tr.innerHTML=`<td style="color:var(--muted)">at clip start</td><td></td><td>${a0?`<span class="sw" style="background:${a0.color}"></span>${a0.name}`:'<i>no camera yet — press 1/2/3 at the start</i>'}</td><td></td>`; tb.appendChild(tr); }
+  S.cuts.forEach((c,i)=>{ if(!inScope(i)) return; const tr=document.createElement('tr'); tr.dataset.i=i; if(i===S.sel) tr.className='sel'; const a=S.byId[c.cam]; const end=Math.min(i+1<S.cuts.length?S.cuts[i+1].t:S.dur, S.scope?S.scope.b:S.dur); const onJoin=joins().some(j=>Math.abs(j.t-c.t)<0.05);
+    tr.innerHTML=`<td style="font-family:ui-monospace,monospace;cursor:pointer" title="seek">${fmt(Math.max(0,D(c.t)))}${onJoin?' <span title="on a join" style="color:#e3b341">⋮</span>':''}</td><td style="color:var(--muted)">${fmt(Math.max(0,toTight(end)-toTight(c.t)),false)}</td><td><span class="sw" style="background:${a?a.color:'#666'}"></span><select>${S.angles.map(x=>`<option value="${x.id}" ${x.id===c.cam?'selected':''}>${x.key} ${x.name}</option>`).join('')}</select>${c.crop?` <span title="framed: zoom ${(1/c.crop.w).toFixed(2)}×">⤢${(1/c.crop.w).toFixed(1)}×</span>`:''}</td><td><button class="mini" title="snap">S</button> <button class="mini danger" title="remove">✕</button></td>`;
+    tr.children[0].onclick=()=>{ S.sel=i; seek(c.t+0.001); renderCutTable(); drawTimeline(); }; tr.querySelector('select').onchange=e=>reassign(i,e.target.value);
+    const [bs,bd]=tr.querySelectorAll('button'); bs.onclick=()=>snapCut(i); bd.onclick=()=>deleteCut(i); tb.appendChild(tr); });
+  if(S.sel>=0){ const row=[...tb.children].find(r=>r.dataset.i==S.sel); if(row) row.scrollIntoView({block:'nearest'}); }
+  renderCutEdit();
+}
+
+// ================================================================ transport (shared video element)
+function seek(t){ const lo=S.scope?S.scope.a:0, hi=S.scope?S.scope.b-0.05:S.dur-0.05; mv.currentTime=Math.max(lo,Math.min(hi,t)); tick(); if(S.cropEdit) placeCropBox(); }
+function setScope(id){ const c=id?S.clips.find(c=>c.id===id):null; S.scope=c?{id:c.id,a:c.a,b:c.b,name:c.name}:null; $('#scopeSel').value=c?c.id:'';
+  if(c){ if(mv.currentTime<c.a||mv.currentTime>c.b) mv.currentTime=c.a; $('#exportTarget').value='clip:'+S.clips.indexOf(c); updateExportLabel(); }
+  S.view={s:0,e:dispDur()}; renderCutTable(); renderRangeTables(); buildCutTranscript(); updateTiles(mv.currentTime); drawTimeline(); updateTc(); wsSave(); if(c) autoGazeForScope(); ensurePoseData(); }
+function refreshScope(){ if(!S.scope) return; const c=S.clips.find(c=>c.id===S.scope.id); if(!c){ setScope(null); return; } S.scope={id:c.id,a:c.a,b:c.b,name:c.name}; }
+function fillScopeSel(){ const sel=$('#scopeSel'); if(!sel) return; const cur=S.scope?S.scope.id:''; sel.innerHTML='<option value="">whole lecture</option>'+S.clips.map(c=>`<option value="${c.id}">${escapeHtml(c.name||'clip')} (${fmt(Math.max(0,toTight(c.b)-toTight(c.a)),false)})</option>`).join(''); sel.value=cur; }
+function togglePlay(){ if(mv.paused) mv.play(); else mv.pause(); }
+mv.addEventListener('play', ()=>{ $('#btnPlay').textContent='⏸ Pause'; $('#tPlay').textContent='⏸ Pause'; });
+mv.addEventListener('pause', ()=>{ $('#btnPlay').textContent='▶ Play'; $('#tPlay').textContent='▶ Play'; });
+$('#btnPlay').onclick=togglePlay; $('#btnBack10').onclick=()=>seek(mv.currentTime-10); $('#btnFwd10').onclick=()=>seek(mv.currentTime+10);
+$('#speed').onchange=e=>mv.playbackRate=parseFloat(e.target.value); $('#tSpeed').onchange=e=>mv.playbackRate=parseFloat(e.target.value);
+$('#btnIn').onclick=()=>{ pushUndo(); S.inPt=mv.currentTime; if(S.outPt!=null&&S.outPt<=S.inPt) S.outPt=null; changed(); toast('in point set'); };
+$('#btnOut').onclick=()=>{ pushUndo(); S.outPt=mv.currentTime; if(S.outPt<=S.inPt) S.inPt=0; changed(); toast('out point set'); };
+$('#btnClearIO').onclick=()=>{ pushUndo(); S.inPt=0; S.outPt=null; changed(); };
+$('#lead').onchange=e=>{ S.lead=parseFloat(e.target.value)||0; changed(); };
+$('#snapLive').onchange=e=>{ S.snapLive=e.target.checked; changed(); };
+$('#fallback').onchange=e=>{ S.fallback=e.target.value; changed(); };
+$('#previewSkips').onchange=e=>{ S.previewSkips=e.target.checked; changed(); };
+$('#btnUndo').onclick=undo; $('#btnRedo').onclick=redo;
+$('#btnSkip').onclick=()=>toggleMark('skip'); $('#scopeSel').onchange=e=>setScope(e.target.value);
+$('#btnView').onclick=toggleView; $('#btnPropose').onclick=e=>proposeSwitches(e);
+// ---- per-shot framing (crop box, 16:9 locked, fractions of the padded frame; h == w in normalised units)
+S.cropEdit=false;
+function frameTarget(){ if(S.cropEdit){ const i=camIndexAt(mv.currentTime); if(i>=0 && i!==S.sel){ S.sel=i; } return i; } const i=(S.sel>=0)?S.sel:camIndexAt(mv.currentTime); return i>=0?i:-1; }
+function setCrop(i, crop){ if(i<0) return; pushUndo(); if(crop && crop.w>=0.999) delete S.cuts[i].crop; else S.cuts[i].crop=crop; changed(); placeCropBox(); }
+function clampCrop(c){ const w=Math.max(0.2,Math.min(1,c.w)); return {w:+w.toFixed(4), x:+Math.max(0,Math.min(1-w,c.x)).toFixed(4), y:+Math.max(0,Math.min(1-w,c.y)).toFixed(4)}; }
+function toggleFrame(on){ const i=frameTarget(); if(on==null) on=!S.cropEdit; if(on && i<0) return toast('no camera block at the playhead');
+  S.cropEdit=on; if(on){ S.sel=i; seek(Math.max(S.cuts[i].t, mv.currentTime)); mv.pause(); } $('#pgmBox').classList.toggle('framing',on); $('#btnFrame').textContent=on?'✓ Done framing (Z)':'⤢ Frame shot'; placeCropBox(); drawTimeline(); renderCutTable(); tick(); }
+function placeCropBox(){ const box=$('#cropBox'); const i=frameTarget(); if(!S.cropEdit||i<0){ box.style.display='none'; $('#frameInfo').textContent=''; return; }
+  const c=S.cuts[i].crop||{x:0,y:0,w:1}; const r=pgm.getBoundingClientRect(), pr=$('#pgmWrap').getBoundingClientRect();
+  box.style.display='block'; box.style.left=(r.left-pr.left+c.x*r.width)+'px'; box.style.top=(r.top-pr.top+c.y*r.height)+'px'; box.style.width=(c.w*r.width)+'px'; box.style.height=(c.w*r.height)+'px';
+  const z=1/c.w; box.querySelector('.lbl').textContent=`${S.byId[S.cuts[i].cam]?S.byId[S.cuts[i].cam].name:''} · zoom ${z.toFixed(2)}×${z>1.7?' ⚠ soft':''}`;
+  $('#frameInfo').textContent=`framing the ${S.byId[S.cuts[i].cam]?S.byId[S.cuts[i].cam].name:''} shot at ${fmt(Math.max(0,D(S.cuts[i].t)),false)} (block ${i+1}) · zoom ${z.toFixed(2)}×${z>1.7?' — above ~1.7× the 1080p cameras get soft':''} · this framing applies to this block only`; }
+(function(){ const box=$('#cropBox'); let drag=null;
+  box.addEventListener('mousedown', e=>{ e.preventDefault(); e.stopPropagation(); const i=frameTarget(); if(i<0) return; const c=S.cuts[i].crop||{x:0,y:0,w:1}; const r=pgm.getBoundingClientRect(); const h=e.target.classList.contains('h')?[...e.target.classList].find(k=>['nw','ne','sw','se'].includes(k)):null;
+    drag={i, h, c0:{...c}, x0:e.clientX, y0:e.clientY, r}; });
+  window.addEventListener('mousemove', e=>{ if(!drag) return; const {i,h,c0,x0,y0,r}=drag; const dx=(e.clientX-x0)/r.width, dy=(e.clientY-y0)/r.height; let c;
+    if(!h){ c={w:c0.w, x:c0.x+dx, y:c0.y+dy}; }
+    else { // resize from a corner, aspect locked: the opposite corner stays fixed
+      const sx=h.includes('e')?1:-1, sy=h.includes('s')?1:-1; const d=Math.max(sx*dx, sy*dy); const w=c0.w+d; const ax=h.includes('e')?c0.x:c0.x+c0.w, ay=h.includes('s')?c0.y:c0.y+c0.w;   // anchor (fixed corner)
+      c={w, x:h.includes('e')?ax:ax-w, y:h.includes('s')?ay:ay-w}; }
+    c=clampCrop(c); S.cuts[i].crop=c.w>=0.999?undefined:c; if(c.w>=0.999) delete S.cuts[i].crop; placeCropBox(); drawProgramTo(pgm,$('#pgmLabel'),mv.currentTime); });
+  window.addEventListener('mouseup', ()=>{ if(!drag) return; const i=drag.i; drag=null; const c=S.cuts[i].crop; S.cuts[i].crop=undefined; delete S.cuts[i].crop; setCrop(i, c||{x:0,y:0,w:1}); });
+  $('#pgmWrap').addEventListener('wheel', e=>{ if(!S.cropEdit) return; e.preventDefault(); zoomCrop(e.deltaY<0?0.95:1/0.95); }, {passive:false});
+})();
+function zoomCrop(f){ const i=frameTarget(); if(i<0) return; const c=S.cuts[i].crop||{x:0,y:0,w:1}; const cx=c.x+c.w/2, cy=c.y+c.w/2; const w=Math.max(0.2,Math.min(1,c.w*f)); setCrop(i, clampCrop({w, x:cx-w/2, y:cy-w/2})); }
+function nudgeCrop(dx,dy){ const i=frameTarget(); if(i<0) return; const c=S.cuts[i].crop; if(!c) return; setCrop(i, clampCrop({...c, x:c.x+dx, y:c.y+dy})); }
+$('#btnFrame').onclick=()=>toggleFrame(); $('#btnFrameReset').onclick=()=>{ const i=frameTarget(); if(i>=0) setCrop(i,{x:0,y:0,w:1}); };
+// ---- gaze-based angle proposals
+const GZ={running:false, minShot:3.0, queue:[], auto:true, pending:null};
+try{ GZ.auto=localStorage.getItem('multicam:gazeAuto')!=='0'; }catch(e){}
+function gazeKey(a,b){ return `${a.toFixed(2)}-${b.toFixed(2)}`; }
+async function gazeCached(a,b){ try{ const r=await (await fetch(`/api/gaze/result?a=${a}&b=${b}`)).json(); return (r&&r.cuts&&!r.needsPerson)?r:null; }catch(e){ return null; } }
+function prewarmGaze(c){ if(!GZ.auto||!c) return; if(!GZ.queue.some(q=>q.id===c.id)) GZ.queue.push({id:c.id,a:c.a,b:c.b,name:c.name}); pumpGaze(); }
+async function pumpGaze(){ if(GZ.running||!GZ.queue.length) return; const q=GZ.queue[0]; if(await gazeCached(q.a,q.b)){ GZ.queue.shift(); return pumpGaze(); }
+  const st=await (await fetch('/api/gaze/status')).json(); if(st.running){ setTimeout(pumpGaze,3000); return; }
+  GZ.queue.shift(); GZ.scope={id:q.id,a:q.a,b:q.b,name:q.name}; GZ.silent=true; GZ.running=true;
+  const r=await fetch('/api/gaze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a:q.a,b:q.b,minShot:GZ.minShot})}); if(!r.ok){ GZ.running=false; setTimeout(pumpGaze,3000); return; }
+  $('#gazeState').textContent=`👁 analysing "${q.name}" in the background…`; setTimeout(pollGaze,1000); }
+async function autoGazeForScope(){ // called when a clip is selected in the Cut tab
+  if(!GZ.auto||!S.scope) return; const c=S.scope; if(S.cuts.some(x=>x.t>=c.a&&x.t<c.b)) return;   // already has cuts: never touch
+  const res=await gazeCached(c.a,c.b);
+  if(res){ if(res.cuts.length){ GZ.scope={...c}; applyGaze(res.cuts,'replace'); toast(`${res.cuts.length} shots set from where the speaker looks — adjust freely (Ctrl+Z undoes)`,5000); } else toast('no speaker face seen in this clip — pick angles manually',4000); return; }
+  GZ.pending=c.id; prewarmGaze(c); toast(`analysing where the speaker looks in "${c.name}" — angles will appear when it finishes`,4000); }
+function modal(html){ const m=$('#modal'); $('#modalBody').innerHTML=html; m.style.display='flex'; return m; }
+function closeModal(){ $('#modal').style.display='none'; }
+$('#gazeAuto').checked=GZ.auto; $('#gazeAuto').onchange=e=>{ GZ.auto=e.target.checked; try{ localStorage.setItem('multicam:gazeAuto',GZ.auto?'1':'0'); }catch(x){} };
+$('#btnGaze').onclick=async()=>{ if(!S.scope) return toast('select a clip first (Clip selector) — the proposal works per clip');
+  try{ const res=await (await fetch(`/api/gaze/result?a=${S.scope.a}&b=${S.scope.b}`)).json(); if(res && res.cuts && !res.needsPerson){ GZ.scope={...S.scope}; GZ.running=true; setTimeout(pollGaze,50); return; } }catch(e){}   // cached analysis for this exact range
+  startGaze(null); };
+async function startGaze(person){ const r=await fetch('/api/gaze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a:S.scope.a,b:S.scope.b,minShot:GZ.minShot,person})}); if(!r.ok){ toast((await r.json()).error||'could not start'); return; } GZ.running=true; GZ.scope={...S.scope}; toast('analysing where the speaker looks…'); setTimeout(pollGaze,800); }
+async function pollGaze(){ try{ const st=await (await fetch('/api/gaze/status')).json(); $('#gazeState').textContent=st.running?`👁 ${st.message||st.state} (${Math.round((st.progress||0)*100)}%)`:''; $('#btnGaze').disabled=!!st.running;
+  if(st.running){ setTimeout(pollGaze,1500); return; }
+  if(!GZ.running) return; GZ.running=false; const silent=GZ.silent; GZ.silent=false;
+  if(silent && st.state==='done'){ const res=await gazeCached(GZ.scope.a,GZ.scope.b); const open_=S.scope&&S.scope.id===GZ.scope.id&&S.tab==='cut';
+    if(res && open_ && !S.cuts.some(x=>x.t>=GZ.scope.a&&x.t<GZ.scope.b)){ if(res.cuts.length){ applyGaze(res.cuts,'replace'); toast(`${res.cuts.length} shots set from where the speaker looks — adjust freely (Ctrl+Z undoes)`,5000); } else toast('no speaker face seen in this clip — pick angles manually',4000); }
+    else if(res) $('#gazeState').textContent=`👁 "${GZ.scope.name}" analysed (${res.cuts.length} shots ready)`;
+    GZ.pending=null; pumpGaze(); return; }
+  if(silent && st.state!=='choose_person'){ pumpGaze(); return; }
+  if(st.state==='choose_person'){ const need=st.needsPerson||{}; const cam=Object.keys(need)[0]; const info=need[cam]; if(!(S.tab==='cut'&&S.scope&&S.scope.id===GZ.scope.id)){ $('#gazeState').textContent=`👁 "${GZ.scope.name}": pick whose gaze to follow (open the clip)`; return; }
+    modal(`<h3 style="margin-top:0">Whose gaze should I follow? (${S.byId[cam]?S.byId[cam].name:cam} camera)</h3><img src="/media/gaze/${info.image}?${Date.now()}" style="max-width:100%;border-radius:6px"><p style="color:var(--muted)">Another person is in view in ${Math.round(info.frac*100)}% of the frames. Pick the numbered person to track.</p><div style="display:flex;gap:8px;flex-wrap:wrap">${info.boxes.map((b,i)=>`<button class="primary" data-p="${i}">Person ${i+1}</button>`).join('')}<button id="mCancel">Cancel</button></div>`);
+    document.querySelectorAll('#modalBody button[data-p]').forEach(b=>b.onclick=()=>{ closeModal(); const person={}; person[cam]=info.boxes[+b.dataset.p]; startGaze(person); }); $('#mCancel').onclick=closeModal; return; }
+  if(st.state!=='done'){ toast('gaze analysis: '+(st.message||st.state), 5000); return; }
+  const res=await (await fetch(`/api/gaze/result?a=${GZ.scope.a}&b=${GZ.scope.b}`)).json(); if(!res.cuts){ toast('no result'); return; }
+  const inside=S.cuts.filter(c=>c.t>=GZ.scope.a&&c.t<GZ.scope.b); const found=Object.entries(res.found||{}).map(([c,n])=>`${S.byId[c]?S.byId[c].name:c}: face in ${n}/${res.samples.length}`).join(' · ');
+  if(!res.cuts.length){ toast('no face found in this clip — nothing to propose', 5000); return; }
+  modal(`<h3 style="margin-top:0">${res.cuts.length} shots proposed from head direction</h3><p style="color:var(--muted)">${found}. Shots ≥ ${res.minShot} s; cut points will snap to your joins.</p><p>${res.cuts.map(c=>`<span class="sw" style="display:inline-block;width:10px;height:10px;background:${S.byId[c.cam]?S.byId[c.cam].color:'#666'};border-radius:2px;margin-right:4px"></span>${fmt(Math.max(0,D(c.t)),false)} ${S.byId[c.cam]?S.byId[c.cam].name:c.cam}`).join(' &nbsp;·&nbsp; ')}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="mReplace">Replace the ${inside.length} cuts in this clip</button><button id="mFill">Only fill stretches longer than ${Math.round(GZ.minShot*2)} s</button><button id="mCancel">Cancel</button></div>`);
+  $('#mCancel').onclick=closeModal;
+  $('#mReplace').onclick=async()=>{ closeModal(); await flushAll(); try{ await fetch('/api/checkpoints',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:`before gaze proposal in ${GZ.scope.name}`})}); loadCheckpoints(); }catch(e){} applyGaze(res.cuts,'replace'); };
+  $('#mFill').onclick=()=>{ closeModal(); applyGaze(res.cuts,'fill'); };
+  }catch(e){ setTimeout(pollGaze,3000); } }
+function applyGaze(prop, mode){ pushUndo(); const a=GZ.scope.a, b=GZ.scope.b; let n=0;
+  const snap=t=>{ const j=nearestJoin(t,0.5); return j!=null?j:t; };
+  if(mode==='replace'){ S.cuts=S.cuts.filter(c=>!(c.t>=a&&c.t<b)); for(const c of prop){ const t=Math.max(a, snap(c.t)); if(covered(c.cam,t) && !S.cuts.some(x=>Math.abs(x.t-t)<0.3)){ S.cuts.push({t,cam:c.cam}); n++; } } }
+  else { const sorted=[...S.cuts].sort((x,y)=>x.t-y.t); for(const c of prop){ const t=snap(c.t); if(t<a||t>=b) continue; const i=camIndexAt(t); const blockStart=i>=0?S.cuts[i].t:a; const blockEnd=(i+1<sorted.length?sorted[i+1].t:b); const cam=i>=0?S.cuts[i].cam:null;
+      if(blockEnd-blockStart>=GZ.minShot*2 && cam!==c.cam && t-blockStart>=GZ.minShot && blockEnd-t>=GZ.minShot && covered(c.cam,t) && !S.cuts.some(x=>Math.abs(x.t-t)<0.3)){ S.cuts.push({t,cam:c.cam}); n++; } } }
+  S.cuts.sort((x,y)=>x.t-y.t); changed(); toast(`${n} cuts ${mode==='replace'?'set':'added'} from head direction — review with [ ] and adjust; Ctrl+Z undoes`, 5000); }
+// ---- edit selected cut panel + clear cuts
+function parseTc(str){ const m=String(str).trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})(?:[.:](\d{1,2}))?$/); if(!m) return null; return (+(m[1]||0))*3600+(+m[2])*60+(+m[3])+((+(m[4]||0))/(m[4]&&m[4].length===2?25:10)); }
+function renderCutEdit(){ const box=$('#cutEdit'); const i=S.sel; if(i<0||!S.cuts[i]){ box.style.display='none'; return; } const c=S.cuts[i]; box.style.display='flex';
+  $('#ceTitle').textContent=`Block ${i+1}`; $('#ceCam').innerHTML=S.angles.map(a=>`<option value="${a.id}" ${a.id===c.cam?'selected':''}>${a.key} ${a.name}</option>`).join(''); $('#ceTime').value=fmt(Math.max(0,D(c.t))); }
+$('#ceCam').onchange=e=>reassign(S.sel,e.target.value);
+$('#ceTime').onkeydown=e=>{ if(e.key==='Enter'){ const v=parseTc(e.target.value); if(v==null) return toast('use mm:ss.ff'); pushUndo(); moveCut(S.sel, Mm(v)); changed(); seek(S.cuts[S.sel].t); } e.stopPropagation(); };
+const nudge=d=>{ if(S.sel<0) return; pushUndo(); moveCut(S.sel, S.cuts[S.sel].t+d); changed(); seek(S.cuts[S.sel].t); };
+$('#ceM1s').onclick=()=>nudge(-1); $('#ceM1f').onclick=()=>nudge(-1/30); $('#ceP1f').onclick=()=>nudge(1/30); $('#ceP1s').onclick=()=>nudge(1);
+$('#ceSnap').onclick=()=>snapCut(S.sel); $('#ceFrame').onclick=()=>{ seek(S.cuts[S.sel].t+0.001); toggleFrame(true); }; $('#ceDel').onclick=()=>deleteCut(S.sel);
+$('#btnClearCuts').onclick=async()=>{ const inClip=!!S.scope; const list=inClip?S.cuts.filter(c=>c.t>=S.scope.a&&c.t<S.scope.b):S.cuts; if(!list.length) return toast('no cuts to clear');
+  if(!confirm(inClip?`Remove the ${list.length} camera cuts inside clip "${S.scope.name}" and start again?\n\n(A checkpoint is saved first. The camera active at the clip start is whatever precedes it — press 1/2/3 at the start to set it.)`:`Remove ALL ${list.length} camera cuts of the lecture and start again?\n\n(A checkpoint is saved first.)`)) return;
+  await flushAll(); try{ await fetch('/api/checkpoints',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:inClip?`before clearing cuts in ${S.scope.name}`:'before clearing all cuts'})}); loadCheckpoints(); }catch(e){}
+  pushUndo(); S.cuts=inClip?S.cuts.filter(c=>!(c.t>=S.scope.a&&c.t<S.scope.b)):[]; S.sel=-1; changed(); toast(inClip?`cuts in "${S.scope.name}" cleared — press 1/2/3 while it plays to cut again`:'all cuts cleared', 4000); };
+$('#btnFrameAll').onclick=()=>{ const i=frameTarget(); if(i<0) return; const cam=S.cuts[i].cam, c=S.cuts[i].crop; pushUndo(); let n=0; S.cuts.forEach(k=>{ if(k.cam===cam){ if(c) k.crop={...c}; else delete k.crop; n++; } }); changed(); toast(`framing applied to ${n} ${S.byId[cam]?S.byId[cam].name:''} blocks`); };
+new ResizeObserver(placeCropBox).observe($('#pgmWrap'));
+$('#btnPose').onclick=async()=>{ const r=await fetch('/api/joins/refine',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); if(!r.ok){ toast((await r.json()).error||'could not start'); return; } toast('matching poses at every join (background)…'); setTimeout(pollPose,600); };
+let poseWasRunning=false;
+let poseTimer=null;
+function autoSwitchJerky(){ const js=(S.joins||[]).filter(j=>j.switchTo && !S.cuts.some(c=>Math.abs(c.t-j.ra)<0.3)); if(!js.length) return 0; pushUndo(); for(const j of js) S.cuts.push({t:j.ra,cam:j.switchTo,auto:true}); S.cuts.sort((x,y)=>x.t-y.t); changed(); toast(`switched camera at ${js.length} jerky cut${js.length>1?'s':''} (Ctrl+Z undoes)`,4000); return js.length; }
+function ensurePoseData(){ clearTimeout(poseTimer); poseTimer=setTimeout(async()=>{ const need=(S.joins||[]).filter(j=>j.type!=='cut' && j.motion==null && !j.matched); if(!need.length) return;
+  try{ const st=await (await fetch('/api/joins/status')).json(); if(st.running) return; const r=await fetch('/api/joins/refine',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}); if(r.ok){ $('#poseState').textContent=`measuring ${need.length} joins…`; setTimeout(pollPose,800); } }catch(e){} }, 2500); }
+async function loadFixes(){ try{ S.fixes=await (await fetch('/api/joins/fixes')).json(); }catch(e){ S.fixes={}; } recomputeMap(); drawTimeline(); renderCutTable(); renderRangeTables(); if(S.tab==='tighten') tStats(); }
+async function pollPose(){ try{ const st=await (await fetch('/api/joins/status')).json(); $('#poseState').textContent=st.running?`◎ ${st.message||st.state}`:(st.state==='done'?`◎ ${st.message}`:''); $('#btnPose').disabled=!!st.running;
+  if(st.running){ poseWasRunning=true; setTimeout(pollPose,2000); } else if(poseWasRunning){ poseWasRunning=false; await loadFixes(); const n=autoSwitchJerky(); $('#poseState').textContent=n?`camera switched at ${n} jerky cut${n>1?'s':''}`:'joins measured'; ensurePoseData(); } }catch(e){ setTimeout(pollPose,4000); } }
+$('#btnHelp').onclick=()=>$('#help').style.display='flex'; $('#btnHelpClose').onclick=()=>$('#help').style.display='none'; $('#help').onclick=e=>{ if(e.target.id==='help') e.target.style.display='none'; };
+function toggleView(){ const cur=D(mv.currentTime); S.timeMode=tight()?'master':'tight'; try{ localStorage.setItem('multicam:view',S.timeMode); }catch(e){} $('#btnView').textContent='View: '+(tight()?'tightened':'master'); S.view={s:0,e:dispDur()}; drawTimeline(); renderCutTable(); renderRangeTables(); updateTc(); toast(tight()?'Tightened view — removed parts are gone, joins are marked in yellow':'Master view — full recording, removed parts shaded', 2500); }
+function updateTc(){ const t=mv.currentTime; const d=Math.max(0,D(t)); $('#tc').textContent=fmt(d); $('#tcDur').textContent='/ '+fmt(dispDur(),false);
+  $('#tcMaster').textContent=(S.scope?`clip "${S.scope.name}" · `:'')+(tight()?`master ${fmt(t,false)} · lecture ${fmt(S.map.TD,false)} after −${fmt(S.dur-S.map.TD,false)}`:`master ${fmt(t,false)} · tightened ${fmt(toTight(t),false)}`); }
+function tick(){
+  if(S.tab==='tighten'){ tTick(); return; } if(S.tab==='images'){ bTick(); return; }
+  if(S.cropEdit && S.tab==='cut'){ const i=camIndexAt(mv.currentTime); if(i>=0 && i!==S.sel){ S.sel=i; placeCropBox(); renderCutTable(); } }
+  let t=mv.currentTime;
+  if((S.previewSkips||tight()) && !mv.paused && !S.drag){ const r=inRemoved(t); if(r && r[1]-t>0.08 && r[1]<S.dur-0.1){ jumpOver(r); t=r[1]; } }
+  if(S.scope && !mv.paused && t>=S.scope.b-0.02){ if($('#scopeLoop').checked){ mv.currentTime=S.scope.a; t=S.scope.a; } else { mv.pause(); mv.currentTime=Math.max(S.scope.a, S.scope.b-0.05); t=mv.currentTime; } }
+  updateTc(); updateTiles(t); drawProgramTo(pgm,$('#pgmLabel'),t); updateTranscript(t);
+  const dt=D(t); if(!mv.paused && (dt<S.view.s || dt>S.view.e)) setView(dt-2, dt-2+(S.view.e-S.view.s));
+  drawTimeline();
+}
+let vfcPending=false;
+function loop(){ if(mv.requestVideoFrameCallback){ if(!vfcPending){ vfcPending=true; mv.requestVideoFrameCallback(()=>{ vfcPending=false; tick(); loop(); }); } } else requestAnimationFrame(()=>{ tick(); loop(); }); }
+function idleLoop(){ if(mv.paused) tick(); setTimeout(idleLoop, BL.active?33:200); }
+
+// ================================================================ keyboard
+document.addEventListener('keydown', e=>{
+  const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='select'||tag==='textarea'||e.target.isContentEditable){ if(e.key==='Escape') e.target.blur(); return; }
+  if(S.tab==='tighten') return tKeys(e); if(S.tab==='images'){ if(e.key===' '){ e.preventDefault(); togglePlay(); } else if(e.key==='ArrowLeft') seek(mv.currentTime-2); else if(e.key==='ArrowRight') seek(mv.currentTime+2); return; }
+  if(e.ctrlKey||e.metaKey){ if(e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); } else if(e.key.toLowerCase()==='y'){ e.preventDefault(); redo(); } return; }
+  if(S.cropEdit){ const step=e.shiftKey?0.05:0.01; switch(e.key){ case 'Escape': case 'z': case 'Z': e.preventDefault(); toggleFrame(false); return; case '+': case '=': zoomCrop(0.9); return; case '-': case '_': zoomCrop(1/0.9); return; case '0': { const i=frameTarget(); if(i>=0) setCrop(i,{x:0,y:0,w:1}); return; }
+      case 'ArrowLeft': e.preventDefault(); nudgeCrop(-step,0); return; case 'ArrowRight': e.preventDefault(); nudgeCrop(step,0); return; case 'ArrowUp': e.preventDefault(); nudgeCrop(0,-step); return; case 'ArrowDown': e.preventDefault(); nudgeCrop(0,step); return; case ' ': e.preventDefault(); togglePlay(); return; } }
+  if(e.key==='z'||e.key==='Z'){ e.preventDefault(); toggleFrame(true); return; }
+  const fr=1/(S.layout?S.layout.fps:25); const byKey=S.angles.find(a=>a.key===e.key);
+  if(byKey){ e.preventDefault(); if(S.sel>=0 && mv.paused && Math.abs(S.cuts[S.sel].t-mv.currentTime)<0.02) reassign(S.sel,byKey.id); else cutNow(byKey.id); return; }
+  switch(e.key){
+    case ' ': case 'k': case 'K': e.preventDefault(); togglePlay(); break;
+    case 'j': case 'J': seek(mv.currentTime-10); break; case 'l': case 'L': seek(mv.currentTime+10); break;
+    case 'ArrowLeft': e.preventDefault(); seek(mv.currentTime-(e.shiftKey?10:1)); break; case 'ArrowRight': e.preventDefault(); seek(mv.currentTime+(e.shiftKey?10:1)); break;
+    case ',': mv.pause(); seek(mv.currentTime-fr); break; case '.': mv.pause(); seek(mv.currentTime+fr); break;
+    case 'Home': seek(0); break; case 'End': seek(S.dur-1); break;
+    case '[': { const i=camIndexAt(mv.currentTime-0.05); if(i>=0){ S.sel=i; seek(S.cuts[i].t); renderCutTable(); } break; }
+    case ']': { const i=camIndexAt(mv.currentTime)+1; if(i<S.cuts.length){ S.sel=i; seek(S.cuts[i].t); renderCutTable(); } break; }
+    case 's': case 'S': snapCut(S.sel); break; case 'v': case 'V': toggleView(); break;
+    case 'x': case 'X': toggleMark('skip'); break;
+    case 'Delete': case 'Backspace': e.preventDefault(); if(S.selR) deleteRange(S.selR.type,S.selR.i); else deleteCut(S.sel); break;
+    case 'i': case 'I': $('#btnIn').click(); break; case 'o': case 'O': $('#btnOut').click(); break;
+    case '?': $('#help').style.display='flex'; break;
+    case 'Escape': if(S.pending){ S.pending=null; toast('range start cancelled'); } S.sel=-1; S.selR=null; drawTimeline(); renderCutTable(); renderRangeTables(); $('#help').style.display='none'; break;
+  }
+});
+
+// ================================================================ export
+async function pollRender(){
+  try{ const st=await (await fetch('/api/render/status')).json();
+    $('#renderState').textContent=(st.state||'idle')+(st.target?` · ${st.target}`:''); $('#progBar').style.width=Math.round((st.progress||0)*100)+'%';
+    $('#renderMsg').textContent=(st.message||'')+(st.warnings&&st.warnings.length?`  ⚠ ${st.warnings.length} no-signal fallback(s)`:'');
+    $('#btnRender').disabled=!!st.running; $('#btnCancelRender').style.display=st.running?'':'none';
+    $('#bExport').disabled=!!st.running; $('#bProgBar').style.width=Math.round((st.progress||0)*100)+'%'; if(st.running||st.state==='done'||st.state==='error') $('#bExportState').textContent=(st.state||'')+(st.target?` · ${st.target}`:'')+(st.message?` — ${st.message}`:'')+(st.state==='done'&&st.output?` → ${st.output.split('/').pop()}`:'');
+    if(st.running) setTimeout(pollRender, 1500);
+  }catch(e){ setTimeout(pollRender, 3000); }
+}
+let CAP=null;
+async function loadHw(){ try{ const h=await (await fetch('/api/hw')).json(); const sel=$('#encSel'); const names={libx264:'CPU (libx264)',h264_nvenc:'NVIDIA NVENC',h264_qsv:'Intel Quick Sync',h264_vaapi:'VA-API (Intel/AMD)',h264_videotoolbox:'Apple VideoToolbox'}; sel.innerHTML=`<option value="auto">encoder: auto (${names[h.encoder_best]||h.encoder_best})</option>`+Object.keys(h.encoder_proofs).filter(k=>h.encoder_proofs[k].ok).map(k=>`<option value="${k}">encoder: ${names[k]||k}</option>`).join(''); sel.value=h.encoder_choice||'auto'; sel.title=`Exports use ${h.encoder_name}. GPU: ${(h.gpus||[]).join(', ')||'none'} · Whisper ${h.whisper.model} on ${h.whisper.device} · topics on ${h.torch_device}`; }catch(e){} }
+$('#encSel').onchange=async e=>{ const r=await fetch('/api/hw',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({encoder:e.target.value})}); if(r.ok){ const h=await r.json(); toast(`exports will use ${h.encoder_name}`); loadHw(); loadCapacity(); } };
+async function loadCapacity(){ try{ CAP=await (await fetch('/api/capacity')).json(); const el=$('#capState'); el.textContent=`💻 ${CAP.ram_available_gb} GB free · ${CAP.cpu_cores} cores · ${CAP.disk_free_gb} GB disk · ~${CAP.est_render_speed_x}× render · ${CAP.encoder_name||''}`; el.title=`RAM ${CAP.ram_available_gb}/${CAP.ram_total_gb} GB available · swap ${CAP.swap_gb} GB · ${CAP.recommended_workers} parallel encoders · clips up to ~${CAP.max_clip_minutes_by_disk} min fit on disk (no RAM limit: everything streams)`+(CAP.notes.length?'\n\n'+CAP.notes.join('\n'):''); el.style.color=CAP.analysis_ok_now?'':'var(--danger)'; }catch(e){} }
+$('#capState').onclick=loadCapacity; setInterval(loadCapacity, 60000);
+function exportEstimate(mins){ const sp=(CAP&&CAP.est_render_speed_x)||2.0; const gb=mins*120/1024; const fits=!CAP||CAP.disk_free_gb==null||gb+5<CAP.disk_free_gb; return {render:Math.round(mins/sp*10)/10, gb:gb.toFixed(2), fits}; }
+async function startRender(){
+  if(!S.cuts.length) return toast('no camera cuts yet');
+  const target=$('#exportTarget').value; const body={};
+  if(target.startsWith('clip:')){ const c=S.clips[parseInt(target.slice(5))]; if(!c) return toast('clip not found'); body.clip=c.name; const mins=(toTight(c.b)-toTight(c.a))/60; const e=exportEstimate(mins); if(!e.fits) return toast(`not enough disk space for a ${mins.toFixed(0)} min export (needs ~${e.gb} GB + 5 GB headroom)`, 6000); if(mins>8 && !confirm(`Export "${c.name}" (${mins.toFixed(1)} min of output)?\n\nEstimated render time ~${e.render} min, ~${e.gb} GB of temporary files. Everything streams, so clip length is not limited by RAM.`)) return; }
+  else { const mins=(toTight(S.outPt==null?S.dur:S.outPt)-toTight(S.inPt))/60; const e=exportEstimate(mins); if(!e.fits) return toast(`not enough disk space (needs ~${e.gb} GB + 5 GB headroom)`, 6000); if(!confirm(`Export the FULL video (${mins.toFixed(0)} min of output after tightening, roughly ${e.render} min to render, ~${e.gb} GB temporary files)?\n\nTo export just a clip, pick it in the dropdown or press ⬇ next to the clip.`)) return; }
+  await save(); await tSaveNow();
+  const r=await fetch('/api/render',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok){ toast((await r.json()).error||'render failed to start'); return; }
+  toast(body.clip?`rendering clip "${body.clip}" → clips/${body.clip}.mp4 (+ .txt)`:'rendering FULL video → multicam_output.mp4', 3500); setTimeout(pollRender, 500);
+}
+$('#btnRender').onclick=startRender; $('#exportTarget').onchange=updateExportLabel;
+$('#btnCancelRender').onclick=async ()=>{ if(!confirm('Cancel the running export?')) return; const r=await fetch('/api/render/cancel',{method:'POST'}); toast(r.ok?'export cancelled':'nothing to cancel'); setTimeout(pollRender,300); };
+
+// ================================================================ TIGHTEN TAB (whole lecture)
+function initTighten(){
+  $('#tPlay').onclick=tTogglePlay; $('#tBack').onclick=()=>tSeek(mv.currentTime-5); $('#tFwd').onclick=()=>tSeek(mv.currentTime+5);
+  $('#tPauseThr').onchange=e=>{ T.pauseThr=Math.max(0.2,parseFloat(e.target.value)||0.7); tRecomputePauses(); tChanged(); };
+  $('#tPauseIn').onchange=e=>{ T.pauseIn=Math.max(0.1,parseFloat(e.target.value)||0.3); tRecomputePauses(); tChanged(); };
+  $('#tPauseEnd').onchange=e=>{ T.pauseEnd=Math.max(0.1,parseFloat(e.target.value)||0.55); tRecomputePauses(); tChanged(); };
+  $('#tDissolve').onchange=e=>{ T.dissolveFrames=Math.max(0,Math.min(15,parseInt(e.target.value)||0)); tRecomputePauses(); tChanged(); };
+  $('#tHold').onchange=e=>{ T.holdMs=Math.max(0,Math.min(500,parseInt(e.target.value)||0)); tChanged(); };
+  $('#tFadeIn').onchange=e=>{ T.fadeIn=Math.max(0,Math.min(3,parseFloat(e.target.value)||0)); tChanged(); };
+  $('#tTail').onchange=e=>{ T.tailOut=Math.max(0,Math.min(5,parseFloat(e.target.value)||0)); tChanged(); };
+  $('#tStartLead').onchange=e=>{ T.startLead=Math.max(0,Math.min(3,parseFloat(e.target.value)||0)); tChanged(); };
+  $('#tEndHold').onchange=e=>{ T.endHold=Math.max(0,Math.min(5,parseFloat(e.target.value)||0)); tChanged(); };
+  $('#tFillers').onchange=e=>{ T.fillers=e.target.value.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean); tChanged(); };
+  $('#tRemovePauses').onclick=tRemoveAllPauses; $('#tAcceptFillers').onclick=tAcceptAllFillers; $('#tUndo').onclick=tUndo; $('#tRedo').onclick=tRedo;
+  $('#tRestoreAll').onclick=()=>{ if(!T.removals.length) return; if(!confirm('Restore everything removed by words in the whole lecture?')) return; tPush(); T.removals=[]; tChanged(); };
+  $('#tTranscribe').onclick=()=>tStartTranscribe(); $('#tTranscribeCancel').onclick=async()=>{ await fetch('/api/transcribe/cancel',{method:'POST'}); tPollAsr(); };
+  $('#tGoCut').onclick=()=>setTab('cut');
+  const txt=$('#tText');
+  txt.addEventListener('mousedown', e=>{ const w=e.target.closest('.w'); if(!w||w.isContentEditable) return; e.preventDefault(); const i=+w.dataset.i;
+    if(e.shiftKey && T.anchor!=null){ T.sel={i0:Math.min(T.anchor,i),i1:Math.max(T.anchor,i)}; } else { T.anchor=i; T.sel={i0:i,i1:i}; T.dragging=true; T.dragMoved=false; } tPaintSel(); });
+  txt.addEventListener('mousemove', e=>{ if(!T.dragging) return; const w=e.target.closest('.w'); if(!w) return; const i=+w.dataset.i; if(i!==T.anchor) T.dragMoved=true; T.sel={i0:Math.min(T.anchor,i),i1:Math.max(T.anchor,i)}; tPaintSel(); });
+  window.addEventListener('mouseup', e=>{ if(!T.dragging) return; T.dragging=false; if(!T.dragMoved){ const w=e.target.closest&&e.target.closest('.w'); if(w){ const i=+w.dataset.i; const rm=tRemovalOfWord(i); if(rm){ tPush(); T.removals.splice(T.removals.indexOf(rm),1); T.sel=null; tChanged(); toast('restored'); } else tSeek(T.words[i].s); } } });
+  txt.addEventListener('click', e=>{ const pz=e.target.closest('.pz'); if(pz){ if(pz.classList.contains('na')) return; const p=tPauses().find(p=>p.i===+pz.dataset.i); if(!p) return; const rm=tRemovalCovering((p.a+p.b)/2); tPush(); if(rm) T.removals.splice(T.removals.indexOf(rm),1); else tRemovePause(p); tChanged(); return; }
+    const ch=e.target.closest('.chip'); if(ch){ tSeek(parseFloat(ch.dataset.t)); } const cc=e.target.closest('.clipchip'); if(cc){ S.selClip=cc.dataset.clip; tRender(true); } });
+  $('#tMakeClip').onclick=tMakeClip; $('#tSetStart').onclick=()=>tSetClipEdge('a'); $('#tSetEnd').onclick=()=>tSetClipEdge('b');
+  $('#tShowTopics').onchange=e=>{ $('#tText').classList.toggle('notopics', !e.target.checked); try{ localStorage.setItem('multicam:topics', e.target.checked?'1':'0'); }catch(x){} };
+  try{ if(localStorage.getItem('multicam:topics')==='0'){ $('#tShowTopics').checked=false; $('#tText').classList.add('notopics'); } }catch(x){}
+  $('#tClearClips').onclick=async()=>{ if(!S.clips.length) return toast('no clips'); if(!confirm(`Remove all ${S.clips.length} clips and start afresh?\n\nA checkpoint "before clearing clips" is saved first; camera cuts and word edits stay.`)) return;
+    await flushAll(); try{ await fetch('/api/checkpoints',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'before clearing clips'})}); loadCheckpoints(); }catch(e){}
+    pushUndo(); S.clips=[]; S.selClip=null; if(S.scope) S.scope=null; changed(); tRender(true); toast('all clips removed — restore via the checkpoint dropdown if needed', 4000); };
+  txt.addEventListener('dblclick', e=>{ const w=e.target.closest('.w'); if(!w) return; tEditWord(w); });
+  txt.addEventListener('contextmenu', e=>{ const wEl=e.target.closest('.w'); if(wEl && !wEl.classList.contains('rm')){ e.preventDefault(); const i=+wEl.dataset.i; const i0=(T.sel&&i>=T.sel.i0&&i<=T.sel.i1)?T.sel.i0:i, i1=(T.sel&&i>=T.sel.i0&&i<=T.sel.i1)?T.sel.i1:i;
+      const m=$('#ctx'); m.innerHTML=`<div data-act="img">🖼 find an image for “${escapeHtml(T.words.slice(i0,i1+1).map(w=>w.t).join(' ').slice(0,40))}”</div>`; m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; m.onclick=ev=>{ m.style.display='none'; if(ev.target.closest('div[data-act=img]')) bFindFromWords(i0,i1); }; return; }
+    const el=e.target.closest('.w.rm, .pz.rm'); if(!el) return; e.preventDefault();
+    let t; if(el.classList.contains('pz')){ const p=tPauses().find(p=>p.i===+el.dataset.i); if(!p) return; t=(p.a+p.b)/2; } else t=(T.words[+el.dataset.i].s+T.words[+el.dataset.i].e)/2;
+    const r=inRemoved(t); if(!r) return; const j=joinAt(r[1]); if(!j){ toast('this removal reaches the end — no join here'); return; }
+    const rm=tRemovalCovering(t); const edgeHtml = rm ? `<div style="color:var(--muted);cursor:default">this cut: ${fmt(rm.a)} → ${fmt(rm.b)}</div>`+[['a',-0.05,'start 50 ms earlier'],['a',0.05,'start 50 ms later'],['b',-0.05,'end 50 ms earlier'],['b',0.05,'end 50 ms later'],['b',0.1,'end 100 ms later'],['auto',0,'edges back to automatic']].map(([ed,dv,lbl])=>`<div data-edge="${ed}" data-dv="${dv}">${lbl}</div>`).join('')+`<div style="border-top:1px solid var(--line);margin:3px 0"></div>` : '';
+    const m=$('#ctx'); m.innerHTML=edgeHtml+`<div style="color:var(--muted);cursor:default">join after this removal (${fmt(j.ra,false)}): ${j.type}${j.add?` +${j.add.toFixed(2)} s`:''}</div>`+joinMenuHtml(j); m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+    bindJoinMenu(m,j); const prevClick=m.onclick; m.onclick=ev=>{ const d=ev.target.closest('div[data-edge]'); if(!d) return prevClick(ev); m.style.display='none'; if(!rm) return; tPush();
+      if(d.dataset.edge==='auto'){ const inside=[]; for(let i=0;i<T.words.length;i++){ const mid=(T.words[i].s+T.words[i].e)/2; if(mid>=rm.a&&mid<rm.b) inside.push(i); } if(inside.length){ const e2=wordEdges(inside[0],inside[inside.length-1]); rm.a=e2.a; rm.b=e2.b; } }
+      else { const dv=parseFloat(d.dataset.dv); if(d.dataset.edge==='a') rm.a=+Math.min(rm.b-0.05,rm.a+dv).toFixed(3); else rm.b=+Math.max(rm.a+0.05,rm.b+dv).toFixed(3); }
+      T.removals.sort((x,y)=>x.a-y.a); tChanged(); toast(`cut now ${fmt(rm.a)} → ${fmt(rm.b)}`); }; });
+  $('#tMini').addEventListener('click', e=>{ const r=e.target.getBoundingClientRect(); tSeek((e.clientX-r.left)/r.width*S.dur); });
+}
+async function tLoadDoc(){ const raw=await (await fetch('/api/tighten')).json(); tApplyDoc(raw); }
+function tApplyDoc(raw){ const doc=migrateTighten(raw, T.words); T.removals=doc.removals; T.corrections=doc.corrections||{}; T.pauseThr=doc.pauseThreshold; T.pauseIn=doc.pauseInSentence; T.pauseEnd=doc.pauseSentenceEnd; T.dissolveFrames=doc.dissolveFrames; T.holdMs=doc.holdMs; T.fadeIn=doc.fadeIn; T.tailOut=doc.tailOut; T.startLead=doc.startLead; T.endHold=doc.endHold; T.joinOverrides=doc.joinOverrides||{}; if(doc.fillers) T.fillers=doc.fillers;
+  $('#tPauseThr').value=T.pauseThr; $('#tPauseIn').value=T.pauseIn; $('#tPauseEnd').value=T.pauseEnd; $('#tDissolve').value=T.dissolveFrames; $('#tHold').value=T.holdMs; $('#tFadeIn').value=T.fadeIn; $('#tTail').value=T.tailOut; $('#tStartLead').value=T.startLead; $('#tEndHold').value=T.endHold; $('#tFillers').value=T.fillers.join(', '); recomputeMap(); }
+// ---- v1/v2 tighten doc -> v2 (mirror of joins.migrate_tighten in Python; idempotent; never loses an edit)
+function tSettings(){ return {pauseThreshold:T.pauseThr,pauseInSentence:T.pauseIn,pauseSentenceEnd:T.pauseEnd,dissolveFrames:T.dissolveFrames,holdMs:T.holdMs,fadeIn:T.fadeIn,tailOut:T.tailOut,startLead:T.startLead,endHold:T.endHold}; }
+function pauseTarget(words,i,s){ return /[.?!]$/.test(words[i].t.trim()) ? s.pauseSentenceEnd : s.pauseInSentence; }
+function pauseRemoval(words,i,s){ if(i<0||i+1>=words.length) return null; const w0=words[i], w1=words[i+1]; const g=w1.s-w0.e, Tt=pauseTarget(words,i,s), d=s.dissolveFrames/30; if(g<=Tt+0.1) return null;
+  let keep = g>=Tt+d ? (Tt-d)/2 : Tt-g/2; keep=Math.max(0.04,keep); const a=w0.e+keep, b=w1.s-keep; if(b-a<0.05) return null; return {kind:'pause', i, a:+a.toFixed(3), b:+b.toFixed(3), label:`pause ${g.toFixed(1)}s → ${Tt.toFixed(2)}s`}; }
+function findPauseIndex(words,a,b,thr){ let lo=0,hi=words.length-1,r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(words[m].e<=a+0.002){r=m;lo=m+1;} else hi=m-1; } for(const i of [r,r-1,r+1]){ if(i>=0&&i<words.length-1&&words[i].e<=a+0.002&&words[i+1].s>=b-0.002&&words[i+1].s-words[i].e>thr) return i; } return null; }
+function migrateTighten(doc, words){ doc=doc||{}; const s={...JD}; for(const k in JD){ if(doc[k]!=null) s[k]=doc[k]; } const out={...s, version:2, corrections:{...(doc.corrections||{})}, joinOverrides:{...(doc.joinOverrides||{})}, removals:[], edgeSnap:([2,3].includes(doc.edgeSnap)?doc.edgeSnap:(doc.edgeSnap?1:0))}; if(doc.fillers) out.fillers=doc.fillers.slice();
+  for(const r of (doc.removals||[])){ if(r.kind==='pause'){ let i=r.i; if(i==null || !(i>=0&&i<words.length-1) || !(words[i].e-0.002<=r.a && words[i+1].s+0.002>=r.b)) i = words.length? findPauseIndex(words,r.a,r.b,s.pauseThreshold) : null;
+      if(i==null){ out.removals.push({...r,kind:'pause-fixed'}); continue; } const rr=pauseRemoval(words,i,s); out.removals.push(rr||{...r,kind:'pause-fixed',i}); } else out.removals.push({...r}); }
+  if(ENV.u8 && out.edgeSnap!==3){ out.removals=snapRemovals(out.removals); out.edgeSnap=3; }
+  out.removals.sort((x,y)=>x.a-y.a); return out; }
+// ---- clips defined by words: start = audible onset of the first word, end = audible end of the last word (never the next word's onset)
+function clipStartAt(i){ const w=T.words[i]; const prev=i>0?T.words[i-1]:null; let t=snapEdge(w.s,'a'); if(prev && t<prev.e-0.05) t=Math.max(prev.e-0.05, w.s-0.12); return +Math.max(0,t).toFixed(3); }
+function quietestForward(t0, t1){ const u8=ENV.u8; if(!u8||!u8.length) return t0; const i0=Math.max(0,Math.floor(t0/ENV.HOP)), i1=Math.min(u8.length-1,Math.floor(t1/ENV.HOP)); let best=i0, bs=Infinity; for(let k=i0;k<=i1;k++){ const sc=u8[k]*1000+(k-i0); if(sc<bs){bs=sc;best=k;} } return +(best*ENV.HOP).toFixed(3); }
+// Whisper ends words ~90 ms EARLY: never cut before the transcript end; search forward for the quietest point up to the next word
+function clipEndAt(i){ const w=T.words[i]; const next=i+1<T.words.length?T.words[i+1]:null;
+  if(next && next.s-w.e<0.2) return +Math.min(S.dur, w.e+0.15).toFixed(3);       // continuous speech: cut a hair late (the render fades the voice over that sliver)
+  const lim=next?Math.max(w.e+0.02, next.s-0.05):w.e+0.35; const t=quietestForward(w.e+0.02, Math.min(w.e+0.35, lim)); return +Math.min(S.dur,Math.max(w.e+0.02,t)).toFixed(3); }
+function fixClipEnds(){ if(!T.words.length) return false; let moved=0; for(const c of S.clips){ let li=-1; for(let i=0;i<T.words.length;i++){ if((T.words[i].s+T.words[i].e)/2<c.b) li=i; else break; } if(li<0) continue; const nb=clipEndAt(li); if(nb>c.b+0.005 && nb-c.b<0.6){ c.b=nb; moved++; } } return moved>0; }
+function tMakeClip(){ if(!T.sel) return toast('select the words of the clip first (drag or shift-click), then ▣'); const {i0,i1}=T.sel; const a=clipStartAt(i0), b=clipEndAt(i1); if(b-a<1) return toast('clip too short');
+  const def=T.words.slice(i0,Math.min(i1+1,i0+5)).map(w=>w.t.replace(/[.,?!]/g,'')).join(' '); const name=prompt('Clip name', def); if(name==null) return;
+  pushUndo(); const c={a,b,name:name.trim()||def,id:newId()}; S.clips.push(c); S.clips.sort((x,y)=>x.a-y.a); S.selClip=c.id; T.sel=null; changed(); tRender(true); toast(`clip "${c.name}": ${fmt(a,false)} → ${fmt(b,false)} (${fmt(toTight(b)-toTight(a),false)} after tightening)`,4000); prewarmGaze(c); }
+function tSetClipEdge(which){ const c=S.clips.find(c=>c.id===S.selClip); if(!c) return toast('select a clip in the list first'); if(!T.sel) return toast('select the word first'); pushUndo();
+  if(which==='a'){ const a=clipStartAt(T.sel.i0); if(a>=c.b-1) return toast('start must be before the end'); c.a=a; } else { const b=clipEndAt(T.sel.i1); if(b<=c.a+1) return toast('end must be after the start'); c.b=b; }
+  S.clips.sort((x,y)=>x.a-y.a); changed(); tRender(true); toast(`clip "${c.name}" now ${fmt(c.a,false)} → ${fmt(c.b,false)}`); prewarmGaze(c); }
+function tRenderClips(){ const tb=document.querySelector('#tClipTable tbody'); if(!tb) return; tb.innerHTML='';
+  S.clips.forEach((c,i)=>{ const tr=document.createElement('tr'); if(c.id===S.selClip) tr.className='sel'; const ws=T.words.filter(w=>(w.s+w.e)/2>=c.a&&(w.s+w.e)/2<c.b); const first=ws.slice(0,4).map(w=>w.t).join(' '), last=ws.slice(-4).map(w=>w.t).join(' ');
+    const col=clipColor(c); tr.style.borderLeft=`5px solid ${col}`;
+    tr.innerHTML=`<td style="cursor:pointer"><div style="display:flex;gap:6px;align-items:center"><input type="color" class="swatch" value="${col}" title="clip colour"><input type="text" value="${escapeAttr(c.name||'')}" style="flex:1"></div><div style="color:var(--muted);font-size:11px">${fmt(c.a,false)} → ${fmt(c.b,false)} · ≈${fmt(Math.max(0,toTight(c.b)-toTight(c.a))+T.tailOut+T.endHold+T.startLead,false)} exported (incl. room after the last word + fade) · ${ws.length} words</div><div style="color:var(--muted);font-size:11px">“${escapeHtml(first)} … ${escapeHtml(last)}”</div></td><td style="white-space:nowrap;vertical-align:top"><button class="mini" title="play from the clip start">▶</button> <button class="mini" title="pick cameras for this clip in the Cut tab">🎥</button> <button class="mini" title="export this clip">⬇</button> <button class="mini danger" title="delete clip">✕</button></td>`;
+    tr.onclick=e=>{ if(e.target.tagName==='BUTTON'||e.target.tagName==='INPUT') return; S.selClip=c.id; tRender(true); const w=document.querySelector('#tText .w.clipstart.selclip'); if(w) w.scrollIntoView({block:'center'}); };
+    tr.querySelector('input[type=text]').onchange=e=>{ pushUndo(); c.name=e.target.value.trim()||c.name; changed(); };
+    tr.querySelector('input[type=color]').oninput=e=>{ c.color=e.target.value; tr.style.borderLeft=`5px solid ${c.color}`; }; tr.querySelector('input[type=color]').onchange=e=>{ pushUndo(); c.color=e.target.value; changed(); tRender(true); };
+    const [bp,bc,bx,bd]=tr.querySelectorAll('button'); bp.onclick=()=>{ S.selClip=c.id; tSeek(c.a); mv.play(); tRenderClips(); }; bc.onclick=()=>{ setTab('cut'); setScope(c.id); }; bx.onclick=()=>{ $('#exportTarget').value='clip:'+i; startRender(); }; bd.onclick=()=>{ if(!confirm(`Delete clip "${c.name}"? (camera cuts stay)`)) return; pushUndo(); S.clips.splice(i,1); if(S.selClip===c.id) S.selClip=null; changed(); tRender(true); };
+    tb.appendChild(tr); });
+  const h=$('#tClipHint'); if(h) h.textContent=T.sel?`${T.sel.i1-T.sel.i0+1} words selected (${fmt(T.words[T.sel.i0].s,false)} → ${fmt(T.words[T.sel.i1].e,false)})`:''; }
+function tRecomputePauses(){ const s=tSettings(); T.removals=T.removals.map(r=>{ if(r.kind!=='pause') return r; const rr=pauseRemoval(T.words,r.i,s); return rr||{...r,kind:'pause-fixed'}; }); }
+async function tLoadWords(){ const r=await (await fetch(`/api/words?a=0&b=${S.dur}`)).json(); const had=T.words.length; T.words=r.words||[]; T.covered=!!r.covered; T.ranges=r.ranges||[]; T._pauses=null; if(fixClipEnds()){ toast('clip ends moved to the true end of their last word'); save(); } buildCutTranscript();
+  if(T.words.length!==had){ T.removals=migrateTighten({...tSettings(),removals:T.removals,corrections:T.corrections,joinOverrides:T.joinOverrides,fillers:T.fillers}, T.words).removals; recomputeMap(); }
+  const cov=T.ranges.reduce((s,x)=>s+(x.b-x.a),0); $('#tAsrState').textContent=T.covered?`complete (${T.words.length} words, ${r.model||'?'})`:`${Math.round(cov/S.dur*100)}% of the lecture transcribed (${T.words.length} words)`;
+  if(!T.covered){ const st=await (await fetch('/api/transcribe/status')).json(); if(!st.running && T.words.length===0) tStartTranscribe(); } T.loaded=true; }
+async function tStartTranscribe(){ const r=await fetch('/api/transcribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({all:true, model:$('#tModel').value})}); if(!r.ok){ toast((await r.json()).error||'could not start transcription'); return; } toast('transcribing the whole lecture in the background'); setTimeout(tPollAsr,500); }
+let asrWasRunning=false;
+async function tPollAsr(){
+  try{ const st=await (await fetch('/api/transcribe/status')).json();
+    $('#tProgBar').style.width=Math.round((st.progress||0)*100)+'%'; $('#tAsrMsg').textContent=st.running?(st.message||st.state):(st.state&&st.state!=='idle'?(st.message||st.state):''); $('#tAsrMsg').title=$('#tAsrMsg').textContent;
+    $('#tTranscribeCancel').style.display=st.running?'':'none'; $('#tTranscribe').disabled=!!st.running;
+    if(st.running){ asrWasRunning=true; T.pollN++; if(T.pollN%6===0 && S.tab==='tighten'){ await tLoadWords(); tRender(true); } setTimeout(tPollAsr,2500); }
+    else if(asrWasRunning){ asrWasRunning=false; await tLoadWords(); tRender(true); toast('transcription finished'); }
+  }catch(e){ setTimeout(tPollAsr,4000); }
+}
+const tKey = w => w.s.toFixed(3);
+function tRemovalCovering(t){ for(const r of T.removals){ if(t>=r.a&&t<r.b) return r; if(r.a>t) break; } return null; }
+function tRemovalOfWord(i){ const w=T.words[i]; return tRemovalCovering((w.s+w.e)/2); }
+function tIsRemoved(i){ return !!tRemovalOfWord(i); }
+function tPauses(){ if(T._pauses&&T._pausesKey===T.words.length+':'+T.pauseThr) return T._pauses; const out=[]; for(let i=0;i<T.words.length-1;i++){ const g=T.words[i+1].s-T.words[i].e; if(g>T.pauseThr) out.push({i, a:T.words[i].e, b:T.words[i+1].s, len:g}); } T._pauses=out; T._pausesKey=T.words.length+':'+T.pauseThr; return out; }
+function tFillerMatches(){ const out=[], fl=T.fillers.map(f=>f.split(/\s+/)); const norm=t=>t.toLowerCase().replace(/[^a-z'?]/g,'');
+  for(let i=0;i<T.words.length;i++){ for(const f of fl){ if(!f.length) continue; let ok=true; for(let k=0;k<f.length;k++){ const w=T.words[i+k]; if(!w||norm(w.t)!==f[k].replace(/[^a-z'?]/g,'')){ ok=false; break; } } if(ok){ out.push({i0:i,i1:i+f.length-1}); i+=f.length-1; break; } } }
+  return out.filter(m=>!tIsRemoved(m.i0)); }
+function tPush(){ T.undo.push(JSON.stringify({removals:T.removals,corrections:T.corrections})); if(T.undo.length>200) T.undo.shift(); T.redo.length=0; }
+function tUndo(){ if(!T.undo.length) return toast('nothing to undo'); T.redo.push(JSON.stringify({removals:T.removals,corrections:T.corrections})); const o=JSON.parse(T.undo.pop()); T.removals=o.removals; T.corrections=o.corrections; tChanged(); }
+function tRedo(){ if(!T.redo.length) return toast('nothing to redo'); T.undo.push(JSON.stringify({removals:T.removals,corrections:T.corrections})); const o=JSON.parse(T.redo.pop()); T.removals=o.removals; T.corrections=o.corrections; tChanged(); }
+function tRemoveWords(i0,i1,kind='words'){ let p=i0-1; while(p>=0&&tIsRemoved(p)) p--; let n=i1+1; while(n<T.words.length&&tIsRemoved(n)) n++; const w0=T.words[i0], w1=T.words[i1];
+  const gb=p>=0? w0.s-T.words[p].e : 0.3, ga=n<T.words.length? T.words[n].s-w1.e : 0.3; let a=w0.s-Math.min(0.08,Math.max(0,gb)/2), b=w1.e+Math.min(0.08,Math.max(0,ga)/2);
+  let kept=null; if(ENV.u8){ const e=wordEdges(i0,i1); if(e.b-e.a>=0.05){ a=e.a; b=e.b; kept=e.kept; } }
+  T.removals.push({a:+a.toFixed(3),b:+b.toFixed(3),kind,kept,label:T.words.slice(i0,i1+1).map(w=>w.t).join(' ').slice(0,60)}); T.removals.sort((x,y)=>x.a-y.a); }
+function tRemovePause(p){ const rr=pauseRemoval(T.words,p.i,tSettings()); if(!rr) return false; T.removals.push(rr); T.removals.sort((x,y)=>x.a-y.a); return true; }
+function tPauseShortenable(p){ return !!pauseRemoval(T.words,p.i,tSettings()); }
+function tRemoveAllPauses(){ const ps=tPauses().filter(p=>!tRemovalCovering((p.a+p.b)/2)&&tPauseShortenable(p)); if(!ps.length) return toast('no pauses above the threshold'); tPush(); ps.forEach(tRemovePause); tChanged(); toast(`shortened ${ps.length} pauses to ${T.pauseIn.toFixed(2)} s / ${T.pauseEnd.toFixed(2)} s`); }
+function tAcceptAllFillers(){ const ms=tFillerMatches(); if(!ms.length) return toast('no filler suggestions'); tPush(); ms.forEach(m=>tRemoveWords(m.i0,m.i1,'filler')); tChanged(); toast(`removed ${ms.length} fillers`); }
+function tDeleteSelection(){ if(!T.sel) return toast('select words first'); const {i0,i1}=T.sel; let a=i0; while(a<=i1&&tIsRemoved(a)) a++; let b=i1; while(b>=a&&tIsRemoved(b)) b--; if(a>b) return; tPush(); tRemoveWords(a,b); T.sel=null; tChanged(); }
+function tEditWord(span){ const i=+span.dataset.i, w=T.words[i]; span.contentEditable='true'; span.textContent=T.corrections[tKey(w)]||w.t; span.focus(); document.getSelection().selectAllChildren(span);
+  const done=(commit)=>{ span.contentEditable='false'; if(commit){ const v=span.textContent.trim(); if(v && v!==w.t){ tPush(); T.corrections[tKey(w)]=v; } else if(v===w.t){ delete T.corrections[tKey(w)]; } } tChanged(); };
+  span.onblur=()=>done(true); span.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); span.blur(); } if(e.key==='Escape'){ span.onblur=null; done(false); } e.stopPropagation(); }; }
+function topicAt(t){ return S.topics.segments.find(s=>t>=s.a&&t<s.b)||null; }
+function tRender(keepScroll){
+  const box=$('#tText'); const st=keepScroll?box.scrollTop:null;
+  if(!T.words.length){ box.innerHTML=`<p style="color:var(--muted)">${T.covered?'No speech found.':'Transcribing… words appear here as they are ready (this panel refreshes itself).'}</p>`; tStats(); tMini(); return; }
+  const fills=new Set(); for(const m of tFillerMatches()) for(let i=m.i0;i<=m.i1;i++) fills.add(i);
+  const pauses=new Map(tPauses().map(p=>[p.i,p])); const segs=S.topics.segments; let si=0; let html='', prev=null, open=false;
+  const openP=(t)=>{ const sg=topicAt(t), tp=sg?S.topics.topics[sg.topic]:null; html+=`<p style="${tp?`border-left-color:${tp.color};background:${tp.color}14`:''}">`; open=true; };
+  T.words.forEach((w,i)=>{
+    let chip=''; while(si<segs.length && segs[si].a<=w.s+0.001){ const tp=S.topics.topics[segs[si].topic]; if(tp && (i===0 || segs[si].a>T.words[i-1].s)) chip+=`<span class="chip" style="background:${tp.color}" data-t="${segs[si].a}" title="${escapeAttr(tp.summary||'')}">${escapeHtml(tp.label)}</span>`; si++; }
+    if(!open){ openP(w.s); } else if(prev){ const g=w.s-prev.e; const brk=chip||g>1.5||(/[.?!]$/.test(prev.t)&&g>0.6); if(brk){ const p=pauses.get(i-1); if(p) html+=tPauseHtml(p); html+='</p>'; openP(w.s); } else { const p=pauses.get(i-1); if(p) html+=tPauseHtml(p); } }
+    html+=chip;
+    const cls=['w']; if(tIsRemoved(i)) cls.push('rm'); if(fills.has(i)) cls.push('fill'); if(w.p<0.5) cls.push('lowp'); if(T.sel&&i>=T.sel.i0&&i<=T.sel.i1) cls.push('sel');
+    const mid=(w.s+w.e)/2; const cl=S.clips.find(c=>mid>=c.a&&mid<c.b); let cchip='';
+    let cstyle='';
+    if(cl){ cls.push('inclip'); const col=clipColor(cl); const selc=cl.id===S.selClip; if(selc) cls.push('selclip'); cstyle=` style="background:${rgba(col,selc?.62:.3)}"`;
+      const pm=i>0?(T.words[i-1].s+T.words[i-1].e)/2:-1; const nm=i+1<T.words.length?(T.words[i+1].s+T.words[i+1].e)/2:1e9; if(pm<cl.a) { cls.push('clipstart'); cchip=`<span class="clipchip" data-clip="${cl.id}" style="background:${col}" title="clip — click to select it in the list">▣ ${escapeHtml(cl.name)}</span>`; } if(nm>=cl.b) cls.push('clipend'); }
+    const txt=T.corrections[tKey(w)]||w.t; html+=cchip+`<span class="${cls.join(' ')}"${cstyle} data-i="${i}" title="${fmt(w.s)}${w.p<0.5?' · low confidence':''}${T.corrections[tKey(w)]?' · corrected from “'+escapeAttr(w.t)+'”':''}${cl?' · in clip “'+escapeAttr(cl.name)+'”':''}">${escapeHtml(txt)}</span> `; prev=w; });
+  if(open) html+='</p>';
+  if(!T.covered){ const cov=(T.ranges||[]).reduce((s,x)=>s+(x.b-x.a),0); html+=`<p style="color:var(--muted);border-left-color:#30363d">… transcribing the rest (${Math.round(cov/S.dur*100)}% done) …</p>`; }
+  box.innerHTML=html; if(st!=null) box.scrollTop=st; tStats(); tMini(); tHighlight(true); tRenderClips();
+}
+function tPauseHtml(p){ const rm=tRemovalCovering((p.a+p.b)/2); const Tt=pauseTarget(T.words,p.i,tSettings()); const na=!rm&&!tPauseShortenable(p); return `<span class="pz ${rm?'rm':''} ${na?'na':''}" data-i="${p.i}" title="${rm?'shortened to '+Tt.toFixed(2)+' s — click to keep the full pause':na?'already close to the target — left as is':'click to shorten this pause to '+Tt.toFixed(2)+' s'}">⏸ ${p.len.toFixed(1)}s${rm?' → '+Tt.toFixed(2)+'s':''}</span> `; }
+function tPaintSel(){ document.querySelectorAll('#tText .w.sel').forEach(el=>el.classList.remove('sel')); if(T.sel) for(let i=T.sel.i0;i<=T.sel.i1;i++){ const el=document.querySelector(`#tText .w[data-i="${i}"]`); if(el) el.classList.add('sel'); } const h=$('#tClipHint'); if(h) h.textContent=T.sel?`${T.sel.i1-T.sel.i0+1} words selected — ▣ makes a clip of exactly these words`:''; }
+function tStats(){ const removed=removedUnion().reduce((s,[a,b])=>s+(b-a),0); const nP=T.removals.filter(r=>r.kind==='pause').length, nF=T.removals.filter(r=>r.kind==='filler').length, nW=T.removals.filter(r=>r.kind==='words').length; const ps=tPauses().filter(p=>!tRemovalCovering((p.a+p.b)/2)).length, fs=tFillerMatches().length;
+  $('#tStats').innerHTML=`<b>${fmt(S.dur,false)}</b> → <b>${fmt(S.map.TD,false)}</b> (−${fmt(removed,false)} removed, +${fmt(Math.max(0,S.map.TD-(S.dur-removed)),false)} micro pauses) · ${nW} word runs, ${nP} pauses, ${nF} fillers, ${S.skips.length} cut-outs`;
+  $('#tRemovePauses').textContent=`Shorten ${ps} pause${ps===1?'':'s'}`; $('#tAcceptFillers').textContent=`Accept ${fs} filler${fs===1?'':'s'}`;
+  const js=S.joins||[], nd=js.filter(j=>j.type==='dissolve').length, nh=js.filter(j=>j.type==='hold').length, nm=js.filter(j=>j.type==='morph').length, nc=js.filter(j=>j.type==='cut').length, addT=js.reduce((s,j)=>s+j.add,0);
+  $('#tJoinStats').textContent=js.length?`→ ${js.length} joins: ${nd} dissolves, ${nh} holds, ${nm} morphs, ${nc} cuts (+${fmt(addT,false)} of micro pauses)${S.moved?` · ◎ ${S.moved} pose-matched`:''} · final ${fmt(S.map.TD,false)}`:''; }
+function tMini(){ const cv=$('#tMini'), W=cv.clientWidth, H=34, dpr=devicePixelRatio||1; if(!W) return; if(cv.width!==Math.round(W*dpr)){ cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); } const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.fillStyle='#0d1117'; c.fillRect(0,0,W,H);
+  const x=t=>t/S.dur*W; for(const sg of S.topics.segments){ const tp=S.topics.topics[sg.topic]; c.fillStyle=tp?tp.color:'#444'; c.globalAlpha=.8; c.fillRect(x(sg.a),4,Math.max(1,x(sg.b)-x(sg.a)-1),12); } c.globalAlpha=1;
+  for(const r of (T.ranges||[])){ c.fillStyle='#3fb950'; c.globalAlpha=.5; c.fillRect(x(r.a),18,Math.max(1,x(r.b)-x(r.a)),3); } c.globalAlpha=1;
+  for(const [a,b] of removedUnion()){ c.fillStyle='#f85149'; c.fillRect(x(a),23,Math.max(1,x(b)-x(a)),8); }
+  for(const cl of S.clips){ c.fillStyle=clipColor(cl); c.globalAlpha=cl.id===S.selClip?1:.7; c.fillRect(x(cl.a),16,Math.max(2,x(cl.b)-x(cl.a)),6); } c.globalAlpha=1;
+  const px=x(mv.currentTime); c.fillStyle='#ff4d4d'; c.fillRect(px-1,0,2,H); }
+function tChanged(){ recomputeMap(); tRender(true); tSave(); ensurePoseData(); if(S.tab!=='cut'){ /* keep Cut tab consistent */ drawTimeline(); renderCutTable(); renderRangeTables(); paintTranscriptColors(); } }
+function tDoc(){ return JSON.stringify({version:2,edgeSnap:ENV.u8?3:0,removals:T.removals,corrections:T.corrections,...tSettings(),joinOverrides:T.joinOverrides,fillers:T.fillers}); }
+function tSave(){ T.dirty=true; setSave('pending','saving…'); clearTimeout(T.saveTimer); T.saveTimer=setTimeout(tSaveNow,800); }
+async function tSaveNow(){ clearTimeout(T.saveTimer); T.saveTimer=null; T.dirty=false; try{ const r=await fetch('/api/tighten',{method:'PUT',headers:{'Content-Type':'application/json'},body:tDoc(),keepalive:true}); if(!r.ok) throw new Error(r.status); setSave('ok','all changes saved · '+new Date().toLocaleTimeString()); }catch(e){ setSave('bad','SAVE FAILED — is the server running?'); } }
+function tSeek(t){ mv.currentTime=Math.max(0,Math.min(S.dur-0.05,t)); tTick(); }
+function tTogglePlay(){ if(mv.paused) mv.play(); else mv.pause(); }
+function tTick(){
+  let t=mv.currentTime;
+  if(!mv.paused){ const r=inRemoved(t); if(r && r[1]-t>0.05 && r[1]<S.dur-0.1){ jumpOver(r); t=r[1]; } }
+  const u=removedUnion(); let el=t; for(const [a,b] of u){ if(b<=t) el-=(b-a); else if(a<t) el-=(t-a); } const removed=u.reduce((s,[a,b])=>s+(b-a),0);
+  $('#tTc').textContent=`${fmt(Math.max(0,toTight(t)),false)} / ${fmt(S.map.TD,false)}   (master ${fmt(t,false)})`;
+  drawProgramTo($('#tPgm'),$('#tPgmLabel'),t); tHighlight(false); tMini();
+}
+function tScrollToPlayhead(){ // coming from the Cut tab: land on the word under the playhead, even when paused
+  const t=mv.currentTime; let lo=0,hi=T.words.length-1,r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(T.words[m].s<=t){r=m;lo=m+1;} else hi=m-1; }
+  if(r<0) return; T.lastWord=-1; tHighlight(true); const el=document.querySelector(`#tText .w[data-i="${r}"]`); if(el){ el.scrollIntoView({block:'center'}); el.animate([{boxShadow:'0 0 0 3px #58a6ff'},{boxShadow:'0 0 0 0 transparent'}],{duration:1400}); }
+  T.anchor=r; }
+function tHighlight(force){ const t=mv.currentTime; let lo=0,hi=T.words.length-1,r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(T.words[m].s<=t){r=m;lo=m+1;} else hi=m-1; } if(r===T.lastWord&&!force) return;
+  const old=document.querySelector('#tText .w.cur'); if(old) old.classList.remove('cur'); if(r>=0){ const el=document.querySelector(`#tText .w[data-i="${r}"]`); if(el){ el.classList.add('cur'); if($('#tFollow').checked&&!T.dragging&&!mv.paused) el.scrollIntoView({block:'center',behavior:'smooth'}); } } T.lastWord=r; }
+function tKeys(e){
+  if(e.ctrlKey||e.metaKey){ if(e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?tRedo():tUndo(); } else if(e.key.toLowerCase()==='y'){ e.preventDefault(); tRedo(); } return; }
+  switch(e.key){ case ' ': case 'k': case 'K': e.preventDefault(); tTogglePlay(); break; case 'j': case 'J': tSeek(mv.currentTime-5); break; case 'l': case 'L': tSeek(mv.currentTime+5); break;
+    case 'ArrowLeft': e.preventDefault(); tSeek(mv.currentTime-(e.shiftKey?5:1)); break; case 'ArrowRight': e.preventDefault(); tSeek(mv.currentTime+(e.shiftKey?5:1)); break; case 'Home': tSeek(0); break;
+    case 'Delete': case 'Backspace': e.preventDefault(); tDeleteSelection(); break; case 'Escape': T.sel=null; tPaintSel(); break; case 'p': case 'P': tRemoveAllPauses(); break; case 'f': case 'F': tAcceptAllFillers(); break; case 'c': case 'C': tMakeClip(); break; case '?': $('#help').style.display='flex'; break; }
+}
+
+// ================================================================ TOPICS (panel inside the Tighten tab)
+const P={wasRunning:false};
+function initTopics(){
+  $('#pGran').oninput=e=>$('#pGranV').textContent=e.target.value;
+  $('#pAnalyse').onclick=async()=>{ const r=await fetch('/api/topics',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({granularity:parseFloat($('#pGran').value), llm:$('#pLLM').checked})}); if(!r.ok){ toast((await r.json()).error||'could not start'); return; } toast('analysing topics…'); setTimeout(pPoll,500); };
+  pPoll();
+}
+async function pLoadTopics(){ try{ const t=await (await fetch('/api/topics')).json(); S.topics=t&&t.topics?t:{segments:[],topics:[],recurrences:[]}; }catch(e){} pRenderList(); if(T.loaded) tRender(true); drawTimeline(); }
+async function pPoll(){ try{ const st=await (await fetch('/api/topics/status')).json(); $('#pMsg').textContent=st.running?`${st.message||st.state}`:(st.state&&st.state!=='idle'&&st.state!=='done'?`${st.state}: ${st.message||''}`:''); $('#pAnalyse').disabled=!!st.running;
+  if(st.running){ P.wasRunning=true; setTimeout(pPoll,2000); } else if(P.wasRunning){ P.wasRunning=false; await pLoadTopics(); toast('topic analysis finished'); } }catch(e){ setTimeout(pPoll,4000); } }
+function wordRangeOf(a,b){ let i0=-1,i1=-1; for(let i=0;i<T.words.length;i++){ const m=(T.words[i].s+T.words[i].e)/2; if(m>=a&&m<b){ if(i0<0) i0=i; i1=i; } } return i0<0?null:{i0,i1}; }
+function pRenderList(){ const box=$('#pList'); const tps=S.topics.topics, segs=S.topics.segments; if(!tps.length){ box.innerHTML='<p style="padding:8px;color:var(--muted)">No analysis yet — press <b>Analyse</b> (needs the transcript).</p>'; return; }
+  let html=`<div style="padding:4px 8px;color:var(--muted);font-size:11px">${segs.length} parts · ${tps.length} topics · ${S.topics.recurrences.length} returns · labels by ${S.topics.labels_source||'?'} · click a part to jump; ▣ makes a word-sharp clip of it</div>`;
+  for(const t of tps){ html+=`<div class="topic" style="border-left-color:${t.color}"><h3><span>${escapeHtml(t.label)}</span><span class="dur">${fmt(t.duration,false)}</span></h3>${t.summary?`<p class="sum">${escapeHtml(t.summary)}</p>`:''}<div>${t.segments.map(i=>`<span class="segchip" data-t="${segs[i].a}" title="${escapeAttr(segs[i].preview)}">${fmt(segs[i].a,false)}–${fmt(segs[i].b,false)}</span><button class="mini" data-seg="${i}" title="clip of exactly this part's words">▣</button> `).join('')}</div>${S.topics.recurrences.filter(r=>r.topic===t.id).map(r=>`<div class="ret">↩ returns at ${fmt(segs[r.to].a,false)}${r.note?': '+escapeHtml(r.note):''}</div>`).join('')}</div>`; }
+  box.innerHTML=html; box.querySelectorAll('.segchip').forEach(el=>el.onclick=()=>{ tSeek(parseFloat(el.dataset.t)); const wr=wordRangeOf(parseFloat(el.dataset.t), parseFloat(el.dataset.t)+0.5); if(wr){ const w=document.querySelector(`#tText .w[data-i="${wr.i0}"]`); if(w) w.scrollIntoView({block:'center'}); } });
+  box.querySelectorAll('button[data-seg]').forEach(b=>b.onclick=()=>{ const sg=segs[+b.dataset.seg]; const tp=tps[sg.topic]; const wr=wordRangeOf(sg.a,sg.b); if(!wr) return toast('no words in this part'); T.sel=wr; tPaintSel(); const a=clipStartAt(wr.i0), bb=clipEndAt(wr.i1); const name=prompt('Clip name', tp.label+(tp.segments.length>1?` #${tp.segments.indexOf(+b.dataset.seg)+1}`:'')); if(name==null) return; pushUndo(); const c={a,b:bb,name:name.trim()||tp.label,id:newId()}; S.clips.push(c); S.clips.sort((x,y)=>x.a-y.a); S.selClip=c.id; T.sel=null; changed(); tRender(true); toast(`clip "${c.name}" created (${fmt(toTight(bb)-toTight(a),false)} after tightening) — pick cameras in the Cut tab`,4000); prewarmGaze(c); }); }
+function pTick(){} function pKeys(e){}
+
+// ================================================================ IMAGES TAB (B-roll suggestions per clip)
+const B={clipId:null, doc:null, wasRunning:false};
+function bClip(){ return S.clips.find(c=>c.id===B.clipId)||null; }
+function bOpen(){ const sel=$('#bClip'); const cur=B.clipId||(S.scope&&S.scope.id)||S.selClip||(S.clips[0]&&S.clips[0].id); sel.innerHTML=S.clips.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); if(cur&&S.clips.some(c=>c.id===cur)) sel.value=cur; B.clipId=sel.value||null; const c=bClip(); if(c&&(mv.currentTime<c.a||mv.currentTime>c.b)) mv.currentTime=c.a; bLoad(); bRenderUsed(); bBuildTranscript(); bTick(); }
+$('#bClip').onchange=e=>{ B.clipId=e.target.value; const c=bClip(); if(c) mv.currentTime=c.a; bLoad(); bRenderUsed(); bBuildTranscript(); };
+// from the Tighten tab: "find an image for these words"
+async function bFindFromWords(i0,i1){ const w0=T.words[i0], w1=T.words[i1]; const mid=(w0.s+w0.e)/2; const c=S.clips.find(k=>mid>=k.a&&mid<k.b); if(!c) return toast('these words are not inside a clip — mark a clip containing them first', 4000);
+  const phrase=T.words.slice(i0,i1+1).map(w=>w.t.replace(/[.,?!]/g,'')).join(' '); const q=prompt('What should I look for a picture of?', phrase); if(q==null||!q.trim()) return;
+  toast(`looking for a picture of “${q}”…`); const r=await fetch('/api/broll/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:c.id,t:w0.s,query:q.trim(),phrase,w0:i0-T.words.findIndex(w=>w.s>=c.a),w1:i1-T.words.findIndex(w=>w.s>=c.a),duration:4})}); const j=await r.json(); if(!r.ok) return toast(j.error||'search failed',5000);
+  B.clipId=c.id; setTab('images'); setTimeout(async()=>{ const doc=await (await fetch('/api/broll/list/'+c.id)).json(); B.doc=doc; bRenderCards(); const it=B.doc.items.find(i=>i.id===j.item.id); if(it){ const card=document.querySelector(`.bcard[data-id="${it.id}"]`); if(card) card.scrollIntoView({block:'center'}); if(bCand(it)&&bCand(it).src) bPreview(it); else toast(`no picture found for “${q}” — try another wording or your own image`,5000); } }, 400); }
+$('#bSuggest').onclick=()=>bSuggest(true);
+$('#bPlay').onclick=()=>{ const c=bClip(); if(!c) return; if(mv.paused){ if(mv.currentTime<c.a||mv.currentTime>=c.b-0.1) mv.currentTime=c.a; mv.play(); } else mv.pause(); };
+mv.addEventListener('play', ()=>$('#bPlay').textContent='⏸ Pause'); mv.addEventListener('pause', ()=>$('#bPlay').textContent='▶ Play');
+async function bLoad(){ const c=bClip(); if(!c){ $('#bCards').innerHTML='<p style="padding:10px;color:var(--muted)">No clips yet — define one in the Tighten tab.</p>'; return; }
+  const doc=await (await fetch('/api/broll/list/'+c.id)).json(); B.doc=doc&&doc.items?doc:null; bRenderCards();
+  if(!B.doc){ const st=await (await fetch('/api/broll/status')).json(); if(!st.running) bSuggest(false); else { B.wasRunning=true; setTimeout(bPoll,1000); } } }
+async function bSuggest(force){ const c=bClip(); if(!c) return; const r=await fetch('/api/broll/suggest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:c.id})}); if(!r.ok){ toast((await r.json()).error||'could not start'); return; } B.wasRunning=true; $('#bState').textContent='looking for image-ready moments…'; $('#bSuggest').disabled=true; setTimeout(bPoll,800); }
+async function bPoll(){ try{ const st=await (await fetch('/api/broll/status')).json(); $('#bState').textContent=st.running?`${st.message||st.state}`:''; $('#bSuggest').disabled=!!st.running;
+  if(st.running){ setTimeout(bPoll,1500); return; } if(!B.wasRunning) return; B.wasRunning=false; if(st.state==='error'){ toast('image search: '+st.message,6000); return; } if(st.clipId===B.clipId){ const doc=await (await fetch('/api/broll/list/'+B.clipId)).json(); B.doc=doc&&doc.items?doc:null; bRenderCards(); toast(st.message||'suggestions ready',3000); } }catch(e){ setTimeout(bPoll,3000); } }
+function bSentence(it){ const w0=T.words.findIndex(w=>Math.abs(w.s-it.t)<0.02); if(w0<0) return escapeHtml(it.phrase); const span=it.w1-it.w0; const i0=Math.max(0,w0-8), i1=Math.min(T.words.length-1,w0+span+8); let h=''; for(let i=i0;i<=i1;i++){ const inside=i>=w0&&i<=w0+span; h+=(inside?'<b>':'')+escapeHtml(T.words[i].t)+(inside?'</b>':'')+' '; } return '…'+h+'…'; }
+function bCand(it){ return it.candidates.length?it.candidates[Math.min(it.pick,it.candidates.length-1)]:null; }
+function bRenderCards(){ const box=$('#bCards'); const c=bClip(); if(!B.doc){ box.innerHTML=`<p style="padding:10px;color:var(--muted)">No suggestions yet for "${escapeHtml(c?c.name:'')}"${$('#bState').textContent?' — '+escapeHtml($('#bState').textContent):''}.</p>`; return; }
+  if(!B.doc.items.length){ box.innerHTML='<p style="padding:10px;color:var(--muted)">Nothing image-ready found in this clip.</p>'; return; }
+  box.innerHTML=B.doc.items.map(it=>{ const cand=bCand(it); const used=S.images.find(im=>im.sugId===it.id); const st=used?'used':it.status;
+    return `<div class="bcard ${st}" data-id="${it.id}">
+      <div>${cand&&cand.src?`<img src="/media/broll/${cand.src}" title="${escapeAttr(cand.title||'')}">`:`<div style="width:200px;height:112px;background:#000;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--muted)">no image yet</div>`}<div class="meta">${cand?escapeHtml((cand.provider||'')+' · '+(cand.license||'')):''}</div></div>
+      <div><div class="sent">${bSentence(it)}</div><div class="meta">at ${fmt(Math.max(0,it.t-(c?c.a:0)),false)} into the clip · <i>${escapeHtml(it.why||'')}</i> · query “${escapeHtml(it.query)}”${cand&&cand.credit?` · credit: ${escapeHtml(cand.credit)}`:''}</div>
+      <div class="acts">${used?`<button class="mini danger" data-act="remove">✕ remove from clip</button><span style="color:#3fb950">used</span>`:`<button class="mini primary" data-act="use" ${cand&&cand.src?'':'disabled'}>✓ Use</button><button class="mini" data-act="ignore">${it.status==='ignored'?'un-ignore':'Ignore'}</button>`}
+        <button class="mini" data-act="next" title="another picture for this query">↻ try another</button><label class="mini" style="cursor:pointer;border:1px solid var(--line);border-radius:5px;padding:1px 6px">own image… <input type="file" accept="image/*" data-act="upload" style="display:none"></label>
+        <label class="chk">duration <input type="number" data-act="dur" value="${(used?used.b-used.a:it.duration).toFixed(1)}" step="0.5" min="1.5" max="12" style="width:56px"> s</label>
+        <label class="chk">mode <select data-act="mode"><option value="full" ${(!used||used.mode!=='pip')?'selected':''}>full frame</option><option value="pip" ${used&&used.mode==='pip'?'selected':''}>picture-in-picture</option></select></label>
+        <label class="chk adv" title="full frame: slowly zoom in over the image's duration"><input type="checkbox" data-act="zoom" ${(!used||(used.zoom==null||used.zoom>1.0005))?'checked':''}> slow zoom</label>
+        <label class="chk adv" title="picture-in-picture corner">corner <select data-act="pos">${[['tr','top right'],['tl','top left'],['br','bottom right'],['bl','bottom left']].map(([v,l])=>`<option value="${v}" ${(used&&used.pos===v)||(!used&&v==='tr')?'selected':''}>${l}</option>`).join('')}</select></label>
+        <label class="chk adv" title="picture-in-picture width as % of the frame">size <input type="number" data-act="size" value="${Math.round(((used&&used.size)||0.35)*100)}" min="15" max="60" step="5" style="width:52px"> %</label>
+        <button class="mini" data-act="go" title="preview at this moment">▶ preview</button></div></div></div>`; }).join('');
+  box.querySelectorAll('.bcard').forEach(card=>{ const id=card.dataset.id; const it=B.doc.items.find(x=>x.id===id); const img=card.querySelector('img'); if(img) img.onclick=()=>bPreview(it);
+    card.querySelectorAll('[data-act]').forEach(el=>{ const act=el.dataset.act;
+      if(act==='use') el.onclick=()=>bUse(it, card); if(act==='remove') el.onclick=()=>bRemove(it); if(act==='ignore') el.onclick=()=>bSetStatus(it, it.status==='ignored'?'new':'ignored'); if(act==='go') el.onclick=()=>bPreview(it);
+      if(act==='next') el.onclick=async()=>{ el.disabled=true; const r=await fetch('/api/broll/next',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:B.clipId,itemId:it.id})}); const j=await r.json(); if(!r.ok){ toast(j.error||'no other image'); el.disabled=false; return; } Object.assign(it,j.item); const used=S.images.find(im=>im.sugId===it.id); if(used){ const cand=bCand(it); Object.assign(used,{src:cand.src,credit:cand.credit||'',license:cand.license,source_url:cand.source_url}); changed(); } bRenderCards(); bRenderUsed(); };
+      if(act==='upload') el.onchange=async()=>{ const f=el.files[0]; if(!f) return; const data=await new Promise(res=>{ const rd=new FileReader(); rd.onload=()=>res(rd.result); rd.readAsDataURL(f); }); const r=await fetch('/api/broll/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:B.clipId,itemId:it.id,name:f.name,data})}); const j=await r.json(); if(!r.ok){ toast(j.error||'upload failed'); return; } Object.assign(it,j.item); const used=S.images.find(im=>im.sugId===it.id); if(used){ Object.assign(used,{src:it.candidates[0].src,credit:'',license:'own',source_url:''}); changed(); } bRenderCards(); bRenderUsed(); toast('your image is in'); };
+      if(act==='dur') el.onchange=()=>{ const v=Math.max(1.5,Math.min(12,parseFloat(el.value)||4)); it.duration=v; fetch('/api/broll/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:B.clipId,itemId:it.id,status:it.status,duration:v})}); const used=S.images.find(im=>im.sugId===it.id); if(used){ pushUndo(); used.b=bEnd(used.a,v); changed(); bRenderUsed(); } };
+      if(act==='mode') el.onchange=()=>{ const used=S.images.find(im=>im.sugId===it.id); if(used){ pushUndo(); used.mode=el.value; changed(); bRenderUsed(); } if(B.focus&&!B.focus.used) B.focus.mode=el.value; };
+      if(act==='zoom') el.onchange=()=>{ const used=S.images.find(im=>im.sugId===it.id); const z=el.checked?1.08:1.0; if(used){ pushUndo(); used.zoom=z; changed(); bRenderUsed(); } if(B.focus&&!B.focus.used) B.focus.zoom=z; };
+      if(act==='pos') el.onchange=()=>{ const used=S.images.find(im=>im.sugId===it.id); if(used){ pushUndo(); used.pos=el.value; changed(); } if(B.focus&&!B.focus.used) B.focus.pos=el.value; };
+      if(act==='size') el.onchange=()=>{ const v=Math.max(0.15,Math.min(0.6,(parseFloat(el.value)||35)/100)); const used=S.images.find(im=>im.sugId===it.id); if(used){ pushUndo(); used.size=v; changed(); } if(B.focus&&!B.focus.used) B.focus.size=v; };
+    }); }); }
+function bEnd(a,dur){ const c=bClip(); let b=a+dur; if(c) b=Math.min(b,c.b); const r=removedUnion().find(([x,y])=>x>a&&x<b); if(r) b=r[0]; return +b.toFixed(3); }
+function bUse(it, card){ const cand=bCand(it); if(!cand||!cand.src) return toast('no image downloaded yet'); const c=bClip();
+  const w0=T.words.findIndex(w=>Math.abs(w.s-it.t)<0.02); const a=Math.max(c?c.a:0, w0>=0?clipStartAt(w0):it.t); const mode=card.querySelector('[data-act=mode]').value; const dur=parseFloat(card.querySelector('[data-act=dur]').value)||it.duration;
+  const zoom=card.querySelector('[data-act=zoom]').checked?1.08:1.0, pos=card.querySelector('[data-act=pos]').value, size=Math.max(0.15,Math.min(0.6,(parseFloat(card.querySelector('[data-act=size]').value)||35)/100));
+  pushUndo(); S.images=S.images.filter(im=>im.sugId!==it.id); S.images.push({id:newId(), sugId:it.id, clipId:c?c.id:null, a:+a.toFixed(3), b:bEnd(a,dur), src:cand.src, mode, pos, size, query:it.query, credit:cand.credit||'', license:cand.license||'', source_url:cand.source_url||'', zoom}); S.images.sort((x,y)=>x.a-y.a);
+  bSetStatus(it,'used'); changed(); bRenderUsed(); const used=S.images.find(im=>im.sugId===it.id); bFocus({...used, used:true}); toast(`image in: "${it.query}" for ${dur}s (${mode==='pip'?'picture-in-picture':'full frame'}) — ⟲ loops around it`); }
+function bRemove(it){ pushUndo(); S.images=S.images.filter(im=>im.sugId!==it.id); bSetStatus(it,'new'); changed(); bRenderUsed(); }
+function bSetStatus(it, st){ it.status=st; fetch('/api/broll/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:B.clipId,itemId:it.id,status:st,duration:it.duration})}); bRenderCards(); }
+function bPreview(it){ const c=bClip(); const used=S.images.find(im=>im.sugId===it.id); if(used){ bFocus({...used, used:true}); return; }
+  const cand=bCand(it); if(!cand||!cand.src) return toast('no image downloaded yet'); const card=document.querySelector(`.bcard[data-id="${it.id}"]`); const mode=card?card.querySelector('[data-act=mode]').value:'full'; const dur=card?(parseFloat(card.querySelector('[data-act=dur]').value)||it.duration):it.duration;
+  const zoom=card&&card.querySelector('[data-act=zoom]')?(card.querySelector('[data-act=zoom]').checked?1.08:1.0):1.08; const pos=card?card.querySelector('[data-act=pos]').value:'tr'; const size=card?Math.max(0.15,Math.min(0.6,(parseFloat(card.querySelector('[data-act=size]').value)||35)/100)):0.35;
+  const w0=T.words.findIndex(w=>Math.abs(w.s-it.t)<0.02); const a=Math.max(c?c.a:0, w0>=0?clipStartAt(w0):it.t); bFocus({a:+a.toFixed(3), b:bEnd(a,dur), src:cand.src, mode, pos, size, credit:cand.credit||'', query:it.query, zoom, used:false}); }
+function bRenderUsed(){ const c=bClip(); const box=$('#bUsed'); const list=S.images.filter(im=>c&&im.a>=c.a&&im.a<c.b); if(!list.length){ box.innerHTML='<p style="color:var(--muted)">none yet — press ✓ Use on a suggestion</p>'; return; }
+  box.innerHTML=list.map(im=>`<div class="bused"><img src="/media/broll/${im.src}"><div><b>${escapeHtml(im.query||'image')}</b> · ${fmt(Math.max(0,im.a-(c?c.a:0)),false)} → ${fmt(Math.max(0,im.b-(c?c.a:0)),false)} (${(im.b-im.a).toFixed(1)} s, ${im.mode==='pip'?`PiP ${({tr:'top right',tl:'top left',br:'bottom right',bl:'bottom left'})[im.pos||'tr']} ${Math.round((im.size||0.35)*100)}%`:`full frame${(im.zoom==null||im.zoom>1.0005)?', slow zoom':', no zoom'}`})<div style="color:var(--muted)">${escapeHtml(im.credit||'own image')}</div></div><div><button class="mini" data-go="${im.id}">▶</button> <button class="mini danger" data-del="${im.id}">✕</button></div></div>`).join('');
+  box.querySelectorAll('button[data-go]').forEach(b=>b.onclick=()=>{ const im=S.images.find(x=>x.id===b.dataset.go); bFocus({...im, used:true}); });
+  box.querySelectorAll('button[data-del]').forEach(b=>b.onclick=()=>{ pushUndo(); const im=S.images.find(x=>x.id===b.dataset.del); S.images=S.images.filter(x=>x.id!==b.dataset.del); if(B.doc){ const it=B.doc.items.find(i=>i.id===(im&&im.sugId)); if(it) bSetStatus(it,'new'); } changed(); bRenderUsed(); bRenderCards(); }); }
+B.focus=null; B.loop=false; B.scrubbing=false;
+function bFocus(f){ // f: {a,b,src,mode,credit,query,used}
+  const c=bClip(); B.focus=f; const lo=Math.max(c?c.a:0, f.a-3), hi=Math.min(c?c.b:S.dur, f.b+3); B.range=[lo,hi];
+  $('#bScrubL').textContent='−'+(f.a-lo).toFixed(1)+' s'; $('#bScrubR').textContent='+'+(hi-f.b).toFixed(1)+' s';
+  $('#bFocusInfo').textContent=`${f.used?'':'candidate (not yet used) — '}${f.query||'image'}: ${f.mode==='pip'?'picture-in-picture':'full frame'}, ${(f.b-f.a).toFixed(1)} s · drag the slider or press ⟲`;
+  mv.pause(); seek(Math.max(lo, f.a-1.5)); bTick(); }
+$('#bScrub').addEventListener('input', e=>{ if(!B.range) return; B.scrubbing=true; mv.pause(); const [lo,hi]=B.range; seek(lo+(hi-lo)*(+e.target.value)/1000); B.scrubbing=false; });
+$('#bLoop').onclick=()=>{ if(!B.focus) return toast('pick an image first (▶ preview on a card)'); B.loop=!B.loop; $('#bLoop').classList.toggle('primary',B.loop); if(B.loop){ seek(Math.max(B.range[0],B.focus.a-2)); mv.play(); } else mv.pause(); };
+function bBuildTranscript(){ const c=bClip(); const box=$('#bTranscript'); if(!c){ box.innerHTML=''; return; } let items=[], cur=null;
+  for(const w of T.words){ if(w.s<c.a||w.s>=c.b) continue; if(!cur||(w.s-cur.end>1.0)||/[.?!]$/.test(cur.last)||cur.n>=24){ cur={start:w.s,end:w.e,text:'',n:0,last:''}; items.push(cur); } cur.text+=(cur.text?' ':'')+(T.corrections[tKey(w)]||w.t); cur.end=w.e; cur.last=w.t; cur.n++; }
+  box.innerHTML=items.map((it,i)=>`<div class="cue" data-t="${it.start}"><span class="t">${fmt(Math.max(0,toTight(it.start)-toTight(c.a)),false)}</span>${escapeHtml(it.text)}</div>`).join('');
+  box.querySelectorAll('.cue').forEach(el=>el.onclick=()=>{ mv.pause(); seek(parseFloat(el.dataset.t)); bTick(); }); }
+async function bFind(){ const c=bClip(); const q=$('#bQuery').value.trim(); if(!c) return toast('pick a clip first'); if(!q) return toast('type what is being talked about, e.g. ENIAC');
+  let t=Math.max(c.a, Math.min(c.b-0.5, mv.currentTime)); $('#bFindState').textContent=`searching for “${q}”…`; $('#bFind').disabled=true;
+  try{ const r=await fetch('/api/broll/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clipId:c.id,t,query:q,duration:4})}); const j=await r.json(); if(!r.ok) throw new Error(j.error||'search failed');
+    const doc=await (await fetch('/api/broll/list/'+c.id)).json(); B.doc=doc; bRenderCards(); $('#bQuery').value=''; const it=B.doc.items.find(i=>i.id===j.item.id); if(it){ const card=document.querySelector(`.bcard[data-id="${it.id}"]`); if(card) card.scrollIntoView({block:'center'}); if(bCand(it)&&bCand(it).src){ bPreview(it); toast(`found a picture for “${q}” — ✓ Use it or ↻ try another`,4000); } else toast(`no picture found for “${q}” — try another wording or use your own image`,5000); }
+  }catch(e){ toast(String(e.message||e),5000); } $('#bFindState').textContent=''; $('#bFind').disabled=false; }
+$('#bFind').onclick=bFind;
+const AI_PRESETS={xai:['https://api.x.ai/v1','grok-4-fast','openai'],openai:['https://api.openai.com/v1','gpt-4o-mini','openai'],ollama:['http://localhost:11434/v1','llama3.1','openai'],anthropic:['https://api.anthropic.com','claude-sonnet-5','anthropic']};
+async function loadAi(){ try{ const a=await (await fetch('/api/ai')).json(); $('#aiProv').value=a.configured||'auto'; if(!$('#aiUrl').value) $('#aiUrl').value=a.base_url||''; if(!$('#aiModel').value) $('#aiModel').value=a.model||''; const txt=(a.available?'✓ ':'· ')+a.detail+(a.has_key?` · key ${a.key_hint}`:''); $('#aiState').textContent=txt; $('#pAiState').textContent=a.available?`(${a.detail.split(',')[0]})`:'(no AI set up — keyword names)'; $('#pLLM').disabled=!a.available; }catch(e){} }
+$('#aiPreset').onchange=e=>{ const p=AI_PRESETS[e.target.value]; if(!p) return; $('#aiUrl').value=p[0]; $('#aiModel').value=p[1]; $('#aiProv').value=p[2]; e.target.value=''; };
+$('#aiSave').onclick=async()=>{ const body={provider:$('#aiProv').value,base_url:$('#aiUrl').value.trim(),model:$('#aiModel').value.trim()}; const k=$('#aiKey').value.trim(); if(k) body.api_key=k; const r=await fetch('/api/ai',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); if(r.ok){ $('#aiKey').value=''; toast('AI assistant settings saved (kept in ~/.config/multicam on this PC)'); loadAi(); } };
+$('#aiClearKey').onclick=async()=>{ const r=await fetch('/api/ai',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider:$('#aiProv').value,base_url:$('#aiUrl').value.trim(),model:$('#aiModel').value.trim(),api_key:''})}); if(r.ok){ toast('API key forgotten'); loadAi(); } };
+loadAi();
+async function loadKeys(){ try{ const k=await (await fetch('/api/keys')).json(); $('#bKeyState').textContent=k.unsplash_access_key?`saved (${k.unsplash_access_key}) — Unsplash is searched first`:'not set — Wikipedia/Commons/Openverse only'; }catch(e){} }
+$('#bSaveKey').onclick=async()=>{ const v=$('#bUnsplashKey').value.trim(); const r=await fetch('/api/keys',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({unsplash_access_key:v})}); if(r.ok){ $('#bUnsplashKey').value=''; toast(v?'Unsplash key saved — new searches use Unsplash first':'Unsplash key removed'); loadKeys(); } };
+loadKeys();
+$('#bExport').onclick=()=>{ const c=bClip(); if(!c) return toast('pick a clip first'); const i=S.clips.indexOf(c); $('#exportTarget').value='clip:'+i; updateExportLabel(); startRender(); }; $('#bQuery').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); bFind(); } e.stopPropagation(); });
+function bTick(){ const c=bClip(); let t=mv.currentTime;
+  if(c && !mv.paused){ const r=inRemoved(t); if(r&&r[1]-t>0.05){ mv.currentTime=r[1]; t=r[1]; }
+    if(B.loop && B.focus){ const end=Math.min(c.b-0.05, B.focus.b+1.5); if(t>=end){ mv.currentTime=Math.max(c.a, B.focus.a-2); t=mv.currentTime; } }
+    else if(t>=c.b-0.02){ mv.pause(); mv.currentTime=c.b-0.05; t=mv.currentTime; } }
+  const cv=$('#bPgm'); drawProgramTo(cv,$('#bPgmLabel'),t);
+  if(B.focus && !B.focus.used && t>=B.focus.a && t<B.focus.b){ const cx=cv.getContext('2d'); if(drawImageOverlay(cx,cv,B.focus,t)) $('#bPgmLabel').textContent=(B.focus.mode==='pip'?'camera + image':'image')+' · '+(B.focus.query||'')+' (preview)'; }
+  if(B.range && !B.scrubbing){ const [lo,hi]=B.range; $('#bScrub').value=Math.round(1000*Math.max(0,Math.min(1,(t-lo)/Math.max(1e-6,hi-lo)))); }
+  $('#bAtTc').textContent=c?fmt(Math.max(0,toTight(t)-toTight(c.a)),false)+' into the clip':'—';
+  $('#bTc').textContent=c?`${fmt(Math.max(0,toTight(t)-toTight(c.a)),false)} / ${fmt(Math.max(0,toTight(c.b)-toTight(c.a)),false)}`+(B.focus?`  ·  image ${(t-B.focus.a)>=0&&(t<B.focus.b)?'ON':(t<B.focus.a?`in ${(B.focus.a-t).toFixed(1)} s`:`ended ${(t-B.focus.b).toFixed(1)} s ago`)}`:''):''; }
+
+// ================================================================ simple / advanced view
+function setAdvanced(on){ document.body.classList.toggle('advanced', !!on); $('#advToggle').checked=!!on; try{ localStorage.setItem('multicam:advanced', on?'1':'0'); }catch(e){} const full=$('#exportTarget').querySelector('option[value=full]'); if(full) full.hidden=!on; if(!on && $('#exportTarget').value==='full' && S.clips.length){ $('#exportTarget').value='clip:'+Math.max(0,S.scope?S.clips.findIndex(c=>c.id===S.scope.id):0); updateExportLabel(); } if(S.tab==='cut'){ fitMv(); drawTimeline(); } }
+$('#advToggle').onchange=e=>setAdvanced(e.target.checked);
+try{ setAdvanced(localStorage.getItem('multicam:advanced')==='1'); }catch(e){ setAdvanced(false); }
+$('#tTopicsHead').onclick=()=>{ const open=$('#tTopicsBox').classList.toggle('open'); document.querySelectorAll('#tTopicsBox .tpbody').forEach(el=>el.style.display=open?'':'none'); $('#tTopicsHead').textContent=(open?'▾':'▸')+' Topics — what is talked about where'; };
+function tAutoTighten(){ if(!T.words.length) return toast('the transcript is not ready yet'); const ps=tPauses().filter(p=>!tRemovalCovering((p.a+p.b)/2)&&tPauseShortenable(p)); const fs=tFillerMatches(); if(!ps.length&&!fs.length) return toast('nothing left to tighten — pauses and fillers are already handled');
+  const before=removedUnion().reduce((s,[a,b])=>s+(b-a),0); tPush(); ps.forEach(tRemovePause); fs.forEach(m=>tRemoveWords(m.i0,m.i1,'filler')); tChanged(); const after=removedUnion().reduce((s,[a,b])=>s+(b-a),0);
+  $('#tAutoInfo').textContent=`shortened ${ps.length} pauses, removed ${fs.length} fillers — ${fmt(after-before,false)} shorter`; toast(`✨ ${ps.length} pauses shortened, ${fs.length} fillers removed — ${fmt(after-before,false)} shorter (Undo reverts)`,5000); }
+$('#tAuto').onclick=tAutoTighten; $('#tUndo2').onclick=tUndo; $('#tRedo2').onclick=tRedo;
+
+// ================================================================ workspace: resume position, checkpoints, flush on close
+const WS={timer:null};
+function wsSave(){ clearTimeout(WS.timer); WS.timer=setTimeout(async()=>{ const doc={tab:S.tab, time:mv.currentTime, view:S.view, timeMode:S.timeMode, tScroll:$('#tText').scrollTop, scope:S.scope?S.scope.id:null, selClip:S.selClip||null, saved:Date.now()}; try{ localStorage.setItem('multicam:ws:'+S.name, JSON.stringify(doc)); }catch(e){} try{ await fetch('/api/workspace',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(doc),keepalive:true}); }catch(e){} }, 1500); }
+async function wsLoad(){ let doc=null; try{ doc=await (await fetch('/api/workspace')).json(); }catch(e){} try{ const l=JSON.parse(localStorage.getItem('multicam:ws:'+S.name)||'null'); if(l && (!doc||!doc.saved||l.saved>doc.saved)) doc=l; }catch(e){} return doc&&doc.saved?doc:null; }
+async function flushAll(){ if(saveTimer) await save(); if(T.saveTimer) await tSaveNow(); }
+window.addEventListener('beforeunload', e=>{ if(saveTimer) save(); if(T.saveTimer) tSaveNow(); wsSave(); if(S.dirty||T.dirty){ e.preventDefault(); e.returnValue='Changes are still being saved — wait a second.'; } });
+document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ flushAll(); wsSave(); } });
+async function loadCheckpoints(){ try{ const r=await (await fetch('/api/checkpoints')).json(); const sel=$('#selCheckpoint'); sel.innerHTML='<option value="">restore checkpoint…</option>'+(r.checkpoints||[]).map(c=>`<option value="${escapeAttr(c.file)}">${escapeHtml(c.name||c.file)} — ${new Date((c.time||0)*1000).toLocaleString()} (${c.cuts||0} cuts, ${c.removals||0} removals)</option>`).join(''); }catch(e){} }
+async function makeCheckpoint(){ const name=prompt('Checkpoint name (e.g. "pauses removed, before camera cuts")', 'checkpoint '+new Date().toLocaleString()); if(name==null) return; await flushAll(); const r=await fetch('/api/checkpoints',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})}); if(!r.ok) return toast('checkpoint failed'); toast(`checkpoint "${name}" saved`); loadCheckpoints(); }
+async function restoreCheckpoint(file){ if(!file) return; const opt=$('#selCheckpoint').selectedOptions[0]; if(!confirm(`Restore "${opt.textContent}"?\n\nThe current state is snapshotted as "before restore" first, so this is reversible.`)){ $('#selCheckpoint').value=''; return; }
+  await flushAll(); const r=await fetch('/api/checkpoints/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file})}); if(!r.ok) return toast('restore failed'); toast('restored — reloading'); wsSave(); setTimeout(()=>location.reload(), 600); }
+
+// ================================================================ tabs + init
+function setTab(tab){
+  S.tab=tab; document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  if(tab==='topics') tab='tighten';
+  $('#cutMain').classList.toggle('tabhide', tab!=='cut'); $('#tightenMain').style.display=tab==='tighten'?'grid':'none'; $('#imagesMain').style.display=tab==='images'?'grid':'none';
+  mv.pause(); wsSave();
+  if(tab==='tighten'){ if(!T.loaded){ tLoadWords().then(()=>{ tRender(); tScrollToPlayhead(); }); } else { tRender(true); tScrollToPlayhead(); } tTick(); }
+  else if(tab==='cut'){ refreshScope(); fillScopeSel(); fitMv(); S.view={s:0,e:dispDur()}; drawTimeline(); renderCutTable(); renderRangeTables(); buildCutTranscript(); updateTc(); }
+  else if(tab==='images'){ bOpen(); } if(tab!=='images'){ B.loop=false; $('#bLoop').classList.remove('primary'); }
+}
+async function init(){
+  const r=await fetch('/api/project'); const Pj=await r.json();
+  if(Pj.error){ document.body.innerHTML=`<pre style="padding:20px">${Pj.error}</pre>`; return; }
+  S.name=Pj.name; $('#projName').textContent=Pj.name; S.layout=Pj.layout; S.angles=Pj.layout.angles; S.byId=Object.fromEntries(S.angles.map(a=>[a.id,a])); S.cues=Pj.cues; S.dur=Pj.layout.duration;
+  let doc=Pj.cuts; if(!doc){ try{ const l=localStorage.getItem('multicam:'+S.name); if(l) doc=JSON.parse(l); }catch(e){} }
+  if(doc){ S.cuts=(doc.cuts||[]).sort((a,b)=>a.t-b.t); S.inPt=doc.in||0; S.outPt=(doc.out==null?null:doc.out); S.fallback=doc.fallback||null; S.lead=(doc.lead==null?0.4:doc.lead); S.snapLive=!!doc.snapLive; S.skips=(doc.skips||[]).sort((a,b)=>a.a-b.a); S.clips=(doc.clips||[]).sort((a,b)=>a.a-b.a); S.images=(doc.images||[]).sort((a,b)=>a.a-b.a); S.previewSkips=doc.previewSkips!==false; }
+  if(!S.fallback||!S.byId[S.fallback]) S.fallback=(S.angles.find(a=>a.id==='slides')||S.angles[0]).id;
+  let addedIds=false; for(const c of S.clips){ if(!c.id){ c.id=newId(); addedIds=true; } }
+  $('#lead').value=S.lead; $('#snapLive').checked=S.snapLive; $('#previewSkips').checked=S.previewSkips;
+  $('#fallback').innerHTML=S.angles.map(a=>`<option value="${a.id}" ${a.id===S.fallback?'selected':''}>${a.key} ${a.name}</option>`).join('');
+  if(!Pj.has_multiview) toast('multiview.mp4 not built yet — run: multicam.py proxy', 6000);
+  try{ S.timeMode=localStorage.getItem('multicam:view')||'tight'; }catch(e){} $('#btnView').textContent='View: '+(tight()?'tightened':'master');
+  await loadEnvelope(); await tLoadDoc(); try{ S.fixes=await (await fetch('/api/joins/fixes')).json(); }catch(e){} recomputeMap(); await tLoadWords(); await pLoadTopics(); pollPose();
+  S.view={s:0,e:dispDur()}; $('#tcDur').textContent='/ '+fmt(dispDur(),false);
+  buildTiles(); buildTranscript(); renderCutTable(); renderRangeTables(); drawTimeline(); updateTc();
+  if(addedIds) save();
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+  initTighten(); initTopics(); tPollAsr();
+  window.addEventListener('resize', ()=>{ fitMv(); drawTimeline(); tMini(); });
+  new ResizeObserver(()=>{ fitMv(); drawTimeline(); }).observe($('#mvBox'));
+  mv.addEventListener('loadedmetadata', tick); mv.addEventListener('seeked', tick);
+  loop(); idleLoop(); pollRender(); loadCapacity(); loadHw();
+  $('#btnSaveNow').onclick=async()=>{ await save(); await tSaveNow(); wsSave(); toast('everything is on disk (cuts.json, tighten.json)'); };
+  $('#btnCheckpoint').onclick=makeCheckpoint; $('#selCheckpoint').onchange=e=>restoreCheckpoint(e.target.value); loadCheckpoints();
+  mv.addEventListener('pause', wsSave); mv.addEventListener('seeked', wsSave); $('#tText').addEventListener('scroll', wsSave, {passive:true});
+  // resume where the user left off
+  const ws=await wsLoad(); const tab=(ws&&ws.tab)||'tighten';
+  if(ws && ws.timeMode){ S.timeMode=ws.timeMode; $('#btnView').textContent='View: '+(tight()?'tightened':'master'); }
+  if(ws && ws.selClip) S.selClip=ws.selClip;
+  setTab(tab); if(ws && ws.scope && S.clips.some(c=>c.id===ws.scope)) setScope(ws.scope);
+  for(const c of S.clips){ if(!S.cuts.some(x=>x.t>=c.a&&x.t<c.b)) prewarmGaze(c); }
+  ensurePoseData();
+  if(ws && isFinite(ws.time) && ws.time>0){ const go=()=>{ mv.currentTime=Math.min(S.dur-0.1, ws.time); if(ws.view&&isFinite(ws.view.s)) S.view=ws.view; if(ws.tScroll&&tab==='tighten') setTimeout(()=>{ $('#tText').scrollTop=ws.tScroll; }, 300); toast(`resumed at ${fmt(ws.time,false)} (${tab} tab)`, 2500); tick(); };
+    if(mv.readyState>=1) go(); else mv.addEventListener('loadedmetadata', go, {once:true}); }
+  setSave('ok','all changes saved');
+}
+init();
+</script>
+</body>
+</html>
