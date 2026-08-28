@@ -495,7 +495,6 @@ def make_handler(lecture_dir):
                     state['topics_proc'] = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
                 return self.send_json({'ok': True})
             if p == '/api/transcribe/cancel':
-                import signal
                 with lock:
                     proc = state['transcribe_proc']
                     if proc is None or proc.poll() is not None:
