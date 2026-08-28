@@ -27,16 +27,24 @@ Requirements: **Python 3.10–3.12** and **ffmpeg**. 8 GB RAM works (with a smal
 ```bash
 git clone https://github.com/prnbs82/multicam-cutter.git
 cd multicam-cutter
-./install.sh            # creates .venv, installs packages, downloads the models, installs the `multicam` command
+./install.sh
 ```
 
-- **Ubuntu/Debian**: `sudo apt install ffmpeg python3-venv` first.
-- **macOS**: `brew install ffmpeg python@3.12` first (Intel and Apple Silicon both work).
+The installer first **shows what it is going to install** on this machine — system packages
+(ffmpeg, Python if needed; via apt/dnf/pacman on Linux, Homebrew on macOS), the Python packages
+(into a private `.venv`, ~1.2 GB), the models (Whisper sized to your RAM/GPU, MiniLM), the
+`multicam` command — and **asks once**. Then it installs everything quietly (details in
+`install.log`) and ends with a hardware check. `./install.sh --dry-run` only shows the plan;
+`--yes` skips the question.
+
+- **Ubuntu/Debian/Fedora/Arch** and **macOS** (Intel and Apple Silicon): nothing to prepare —
+  the installer handles ffmpeg and Python (it asks for your password for the system packages).
 - **Windows**: install WSL2 with Ubuntu (`wsl --install` in PowerShell), open Ubuntu, then follow
   the Linux steps. Keep the lecture folder on the Linux side (`~/lectures/…`, not `/mnt/c/…`) for fast
   ffmpeg I/O, and raise WSL's RAM cap in `C:\Users\<you>\.wslconfig` (`[wsl2]`, `memory=12GB`, `swap=8GB`).
   An NVIDIA GPU works for Whisper (CUDA) in WSL2, but **not** for video encoding — exports use the CPU there.
-- **NVIDIA GPU**: `./install.sh --cuda` puts Whisper on the GPU (much faster transcripts).
+- **NVIDIA GPU**: detected automatically — the CUDA build is installed and Whisper runs on the GPU
+  (`--cpu` / `--cuda` force either).
 - `./install.sh --no-models` skips the model downloads (they happen on first use instead).
 
 Full dependency specification (system packages, Python packages and why, models downloaded at

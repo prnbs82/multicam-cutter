@@ -12,12 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.11' }
-      - name: ffmpeg
-        run: |
-          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y ffmpeg; else brew install ffmpeg; fi
-          ffmpeg -version | head -1
-      - name: install
-        run: ./install.sh --no-models
+      - name: install (unattended; installs ffmpeg itself via apt / brew)
+        run: ./install.sh --yes --no-models
+      - name: install log
+        if: always()
+        run: tail -n 40 install.log
       - name: lint
         run: .venv/bin/python -m pip install -q pyflakes && .venv/bin/python -m pyflakes *.py
       - name: doctor

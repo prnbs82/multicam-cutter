@@ -20,3 +20,4 @@ venv/
 .DS_Store
 # editor backups of the single-file UI
 web/*.bak.html
+install.log

@@ -122,7 +122,8 @@ sudo apt install -y ffmpeg python3 python3-venv python3-pip lsof git
 
 git clone https://github.com/prnbs82/multicam-cutter.git
 cd multicam-cutter
-./install.sh                 # add --cuda on an NVIDIA machine, --no-models to defer downloads
+./install.sh                 # shows the plan (system packages, Python packages, models), asks once, installs quietly
+#            --yes (unattended) --dry-run (plan only) --no-models (defer downloads) --cpu/--cuda (force build); NVIDIA is auto-detected
 ```
 
 Verification, in order:
