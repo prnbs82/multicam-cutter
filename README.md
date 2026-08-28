@@ -37,6 +37,10 @@ cd multicam-cutter
 - **NVIDIA GPU**: `./install.sh --cuda` puts Whisper on the GPU (much faster transcripts).
 - `./install.sh --no-models` skips the model downloads (they happen on first use instead).
 
+Full dependency specification (system packages, Python packages and why, models downloaded at
+runtime, hardware acceleration, pitfalls) — written so a person *or an AI agent* can set up a new
+machine from it: [`SETUP.md`](SETUP.md).
+
 The installer ends with a hardware report (`multicam doctor`): which video encoders work on this
 machine, which Whisper model/device will be used, and anything missing.
 
