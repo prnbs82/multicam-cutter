@@ -2,8 +2,8 @@
 
 The JavaScript in web/index.html implements the same rules (migrateTighten / computeJoins); keep them in sync.
 """
-import json, os, subprocess
-from common import load_json, save_json, run, work_dir
+import os
+from common import load_json, run, work_dir
 
 FPS = 30
 DEFAULTS = {'pauseThreshold': 0.7, 'pauseInSentence': 0.30, 'pauseSentenceEnd': 0.55, 'dissolveFrames': 6, 'holdMs': 120,

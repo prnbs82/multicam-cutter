@@ -6,7 +6,7 @@ within the face width (0 = frontal, +-0.5 = profile). At each instant the speake
 turn; when no camera sees her near-frontal she has turned to the board/screen -> the Slides angle. Runs are smoothed to a
 minimum shot length. Results: _multicam/gaze/<key>.json ; status: _multicam/gaze/status.json
 """
-import json, os, subprocess, time
+import os, subprocess, time
 import numpy as np
 from common import load_json, save_json, work_dir
 

@@ -159,7 +159,7 @@ try:
     assert 'CORRECTED' in toks and 'v0' not in toks and not ({'v10', 'v11', 'v12', 'v13'} & toks) and {'v9', 'v14', 'w9'} <= toks, toks
     print('tighten txt OK')
     # audio boundaries must be click-free: no sample-to-sample jump above -30 dBFS anywhere near the joins
-    import wave, struct
+    import wave
     wavp = os.path.join(ld, '_multicam', 'render', 'audio.wav')
     with wave.open(wavp) as wf:
         n = wf.getnframes(); ch = wf.getnchannels(); data = wf.readframes(n)

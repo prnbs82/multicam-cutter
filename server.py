@@ -507,7 +507,6 @@ def make_handler(lecture_dir):
                     state['transcribe_proc'] = None
                 return self.send_json({'ok': True})
             if p == '/api/render/cancel':
-                import signal
                 with lock:
                     proc = state['render_proc']
                     if proc is None or proc.poll() is not None:

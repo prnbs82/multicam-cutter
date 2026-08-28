@@ -5,7 +5,7 @@ quietest hop in a window around the transcript boundary, so cuts never land insi
 """
 import os
 import numpy as np
-from common import load_json, work_dir
+from common import load_json
 
 HOP = 0.01
 SNAP_BACK, SNAP_FWD = 0.20, 0.10     # left edge searches [a-0.20, a+0.10]; right edge mirrors it [b-0.10, b+0.20]

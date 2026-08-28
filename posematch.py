@@ -4,7 +4,7 @@ For a same-camera join, candidate frames are taken ONLY from the removed footage
 scored by upper-body pose similarity (MediaPipe pose landmarks; image-difference fallback), and the join is moved
 to the best-matching pair. Results are cached in _multicam/joinfix.json keyed by the join's removed region.
 """
-import json, os, time
+import os, time
 import numpy as np
 from common import load_json, save_json, work_dir
 
@@ -33,7 +33,6 @@ def fix_key(j):
 class Envelope:
     """10 ms RMS envelope of the master audio (from the 8 kHz sync wav); tells how far the audio is quiet around a time."""
     def __init__(self, wd):
-        import glob
         from scipy.io import wavfile
         proj = load_json(os.path.join(wd, 'project.json'))
         path = os.path.join(wd, 'wav', proj['master_audio']['name'] + '.wav')

@@ -158,7 +158,7 @@ def wikipedia_candidates(query, n=3):
             continue
         try:
             info = _commons_fileinfo('File:' + fname)
-        except Exception as e:
+        except Exception:
             info = None
         if not info or not info.get('src_url'):
             continue

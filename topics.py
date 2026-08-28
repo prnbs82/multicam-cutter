@@ -4,9 +4,9 @@ sentences -> local sentence embeddings (MiniLM via transformers) -> TextTiling-s
 -> agglomerative clustering into topics -> recurrences -> labels (claude CLI, fallback: TF-IDF keywords)
 Writes _multicam/topics.json and topics/status.json.
 """
-import json, os, re, subprocess, time
+import json, os, time
 import numpy as np
-from common import load_json, save_json, work_dir
+from common import save_json, work_dir
 from transcribe import load_words
 
 EMB_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'

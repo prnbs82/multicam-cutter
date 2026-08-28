@@ -3,7 +3,7 @@
 Uses OpenCV DIS optical flow at reduced resolution, checks forward/backward consistency, and returns None when the
 flow is unreliable (large or inconsistent motion) so the caller can fall back to a plain dissolve.
 """
-import os, subprocess
+import subprocess
 import numpy as np
 
 FLOW_W = 640          # flow is computed at this width, then upscaled
