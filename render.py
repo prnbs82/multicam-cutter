@@ -161,10 +161,18 @@ def split_pieces(pieces):
     return out
 
 
+def has_drawtext():
+    """False on ffmpeg builds without libfreetype (credits then go to the .txt only)."""
+    if os.environ.get('MULTICAM_TEST_NO_DRAWTEXT'):
+        return False
+    from hw import ffmpeg_filters
+    return 'drawtext' in ffmpeg_filters()
+
+
 def credit_filter(text, tmpdir):
-    """drawtext for the image credit (bottom-right, small, boxed); '' when there is nothing to credit."""
+    """drawtext for the image credit (bottom-right, small, boxed); '' when there is nothing to credit or no drawtext filter."""
     text = (text or '').strip()
-    if not text:
+    if not text or not has_drawtext():
         return ''
     path = os.path.join(tmpdir, 'credit.txt')
     with open(path, 'w', encoding='utf-8') as f:
@@ -595,6 +603,8 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
             aitems.append({'type': 'tail', 'len': tail_len})
         # never list a piece that cannot have a file: drop zero-frame slivers (they carry no time)
         vitems = [it for it in vitems if not (it['type'] == 'video' and round((it['piece']['b'] - it['piece']['a']) * OFPS) <= 0)]
+        if any((im.get('credit') or '').strip() for im in (images or [])) and not has_drawtext():
+            warnings.append("this ffmpeg has no drawtext filter: image credits are not burned into the picture (they are listed in the .txt)")
         warn = sorted(set(warnings))
         for w in warn:
             print('WARNING:', w)

@@ -123,6 +123,25 @@ def ffmpeg_encoders():
     return {line.split()[1] for line in out.splitlines() if line.startswith(' V') and len(line.split()) > 1}
 
 
+_FILTERS = None
+
+
+def ffmpeg_filters():
+    """Names of the filters this ffmpeg build has (cached)."""
+    global _FILTERS
+    if _FILTERS is None:
+        try:
+            out = subprocess.run(['ffmpeg', '-hide_banner', '-filters'], capture_output=True, text=True, timeout=10).stdout
+            _FILTERS = {line.split()[1] for line in out.splitlines() if line.startswith(' ') and len(line.split()) > 2}
+        except Exception:
+            _FILTERS = set()
+    return _FILTERS
+
+
+REQUIRED_FILTERS = {'xfade': 'dissolves and holds', 'tpad': 'frame-exact pieces', 'zoompan': 'image zoom', 'overlay': 'picture-in-picture'}
+OPTIONAL_FILTERS = {'drawtext': 'image credits burned into the picture (needs an ffmpeg built with libfreetype; credits are always in the .txt)'}
+
+
 def nvidia_gpus():
     if not shutil.which('nvidia-smi'):
         return []
@@ -316,6 +335,14 @@ def doctor(lecture_dir=None, refresh=False):
         print(f"  (your choice {r['encoder_choice']!r} is not usable here — falling back to {r['encoder']})")
     print(f"Whisper  : {r['whisper']['model']} on {r['whisper']['device']} ({r['whisper']['compute_type']})")
     print(f"Topics   : MiniLM on {r['torch_device']}")
+    filters = ffmpeg_filters()
+    for f, why in REQUIRED_FILTERS.items():
+        if filters and f not in filters:
+            print(f"✗ ffmpeg lacks the '{f}' filter — needed for {why}; install a full ffmpeg build")
+            problems += 1
+    for f, why in OPTIONAL_FILTERS.items():
+        if filters and f not in filters:
+            print(f"· ffmpeg lacks the '{f}' filter — {why}")
     miss = missing_python_modules()
     for m in miss:
         print(f"✗ python module {m['module']} missing (pip install {m['package']}) — needed for {m['needed_for']}")
