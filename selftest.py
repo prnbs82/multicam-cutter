@@ -287,8 +287,14 @@ try:
         if time.time() - t0 > 600: raise SystemExit('captions render timeout')
         time.sleep(1)
     assert S['state'] == 'done', S
-    cbase = os.path.join(ld, 'clips', 'captions', 'History of memory')     # burned exports keep sidecars out of the player's reach
-    assert not os.path.exists(os.path.join(ld, 'clips', 'History of memory.srt')), 'sidecar next to a burned export (players would double the captions)'
+    from hw import ffmpeg_filters
+    CAN_BURN = 'ass' in ffmpeg_filters()          # minimal ffmpeg builds (e.g. the macOS CI runner) have no libass
+    if CAN_BURN:                                  # burned exports keep sidecars out of the player's reach
+        cbase = os.path.join(ld, 'clips', 'captions', 'History of memory')
+        assert not os.path.exists(os.path.join(ld, 'clips', 'History of memory.srt')), 'sidecar next to a burned export (players would double the captions)'
+    else:                                         # no burn possible -> sidecars stay next to the .mp4 for the player
+        cbase = os.path.join(ld, 'clips', 'History of memory')
+        print('  (ffmpeg has no libass here — checking the sidecar-only path)')
     ass_txt = open(cbase + '.ass', encoding='utf-8').read()
     assert os.path.exists(cbase + '.srt'), 'srt sidecar missing'
     assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
