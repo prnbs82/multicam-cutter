@@ -160,15 +160,14 @@ def write_ass(path, bl, doc):
         if not kar or len(ws) == 1:
             lines.append(f"Dialogue: 0,{_ass_t(b['a'])},{_ass_t(b['b'])},Default,,0,0,0,," + ' '.join(word_tag(w, None) for w in ws))
             continue
-        # karaoke: one event per spoken word, the active word emphasised; a final plain event covers the block's tail
+        # karaoke: one event per spoken word; a word stays lit until the next one starts, and the LAST word stays
+        # lit until the caption disappears — dropping the emphasis at the end made the whole line visibly shrink
         for i, w in enumerate(ws):
             ea = max(b['a'], w['a']) if i else b['a']
-            eb = ws[i + 1]['a'] if i + 1 < len(ws) else min(b['b'], ws[-1]['b'])
+            eb = ws[i + 1]['a'] if i + 1 < len(ws) else b['b']
             if eb - ea < 0.01:
                 continue
             lines.append(f"Dialogue: 0,{_ass_t(ea)},{_ass_t(eb)},Default,,0,0,0,," + ' '.join(word_tag(x, x is w) for x in ws))
-        if b['b'] - ws[-1]['b'] > 0.05:
-            lines.append(f"Dialogue: 0,{_ass_t(ws[-1]['b'])},{_ass_t(b['b'])},Default,,0,0,0,," + ' '.join(word_tag(w, None) for w in ws))
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     return path

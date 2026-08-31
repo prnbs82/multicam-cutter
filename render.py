@@ -736,7 +736,8 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
                 if it['type'] == 'video':
                     segs.append((it['piece']['a'], it['piece']['b'], tt))
                 tt += ln
-            cblocks = cap.blocks(cap.kept(words, intervals, tdoc.get('corrections', {}), capdoc, segs), capdoc)
+            # all_words, not the clip-scoped list: caption overrides are keyed by the word's index in words.json
+            cblocks = cap.blocks(cap.kept(all_words, intervals, tdoc.get('corrections', {}), capdoc, segs), capdoc)
             if cblocks:
                 from hw import ffmpeg_filters
                 burn = capdoc.get('enabled') and 'ass' in ffmpeg_filters()

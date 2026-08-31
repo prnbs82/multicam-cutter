@@ -1418,12 +1418,13 @@ function ccBlocks(){ if(CC.blocks) return CC.blocks; const kws=ccKept(), mx=Math
 // paint the caption for master time t onto a preview canvas: wrapped lines, outline or dark box, per-word colours
 function drawCaption(cx,canvas,t){ const bl=ccBlocks(); if(!bl.length) return; let i=Math.min(CC.bi,bl.length-1); while(i>0&&t<bl[i].a) i--; while(i<bl.length-1&&t>bl[i].b) i++; CC.bi=i; const b=bl[i]; if(t<b.a||t>b.b) return;
   const px=Math.max(10,canvas.height*(+CC.doc.sizePct||4.5)/100); cx.save(); cx.font=`bold ${px}px 'DejaVu Sans','Arial',sans-serif`; cx.textBaseline='alphabetic';
-  const maxW=canvas.width*0.9, spw=cx.measureText(' ').width, lines=[[]]; let lw=0;
-  for(const w of b.words){ const ww=cx.measureText(w.t).width; if(lw>0&&lw+spw+ww>maxW){ lines.push([]); lw=0; } lines[lines.length-1].push({...w,ww}); lw+=(lw?spw:0)+ww; }
+  let ai=-1; for(let k=0;k<b.words.length;k++) if(t>=b.words[k].a) ai=k;   // the latest word started stays lit until the next one (or the caption) ends
+  const maxW=canvas.width*0.9, spw=cx.measureText(' ').width, lines=[[]]; let lw=0, ki=0;
+  for(const w of b.words){ const ww=cx.measureText(w.t).width; if(lw>0&&lw+spw+ww>maxW){ lines.push([]); lw=0; } lines[lines.length-1].push({...w,ww,k:ki++}); lw+=(lw?spw:0)+ww; }
   const lh=px*1.28, y0=CC.doc.position==='top'?px*1.25:canvas.height-canvas.height*0.05-(lines.length-1)*lh;
   lines.forEach((ln,li)=>{ const tw=ln.reduce((s,w)=>s+w.ww,0)+spw*(ln.length-1); let x=(canvas.width-tw)/2; const y=y0+li*lh;
     if(CC.doc.bg){ cx.fillStyle='rgba(0,0,0,.55)'; cx.fillRect(x-px*0.3,y-px*1.02,tw+px*0.6,lh); }
-    for(const w of ln){ const act=CC.doc.karaoke!==false&&t>=w.a&&t<w.b; const dim=CC.doc.karaoke!==false&&!act;
+    for(const w of ln){ const act=CC.doc.karaoke!==false&&w.k===ai; const dim=CC.doc.karaoke!==false&&!act;
       if(act){ cx.font=`bold ${px*1.12}px 'DejaVu Sans','Arial',sans-serif`; }
       cx.globalAlpha=dim?0.78:1;
       const dx=act?x-w.ww*0.06:x, dy=act?y+px*0.01:y;

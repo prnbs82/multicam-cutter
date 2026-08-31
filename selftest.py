@@ -273,7 +273,13 @@ try:
     print('broll render OK (full-frame + PiP pieces, credits in txt)')
 
     # ---- captions: colour one word, replace one, hide one; sidecars written; burn-in keeps the export frame-exact
+    wj_path = os.path.join(ld, '_multicam', 'words.json')
+    wj = json.load(open(wj_path))
+    if not any(w['t'] == 'early' for w in wj['words']):      # a word BEFORE the clip shifts all indices: overrides must still land
+        wj['words'].insert(0, {'s': 5.0, 'e': 5.3, 't': 'early', 'p': 0.9})
+        json.dump(wj, open(wj_path, 'w'))
     st, h, b = req('/api/words?a=0&b=100000'); W = json.loads(b)['words']
+    assert W[0]['t'] == 'early', 'index-shift word missing'
     iv2 = next(i for i, w in enumerate(W) if w['t'].strip().rstrip('.') in ('vacuum', 'v2'))   # broll section swapped in its own words
     st, h, b = req('/api/captions', 'PUT', {'enabled': True, 'sizePct': 5.0, 'color': '#FFFFFF', 'position': 'bottom',
                                             'words': {str(iv2): {'color': '#FF0000'}, str(iv2 + 1): {'text': 'REPLACED'}, str(iv2 + 2): {'text': ''}}})
@@ -298,8 +304,9 @@ try:
     ass_txt = open(cbase + '.ass', encoding='utf-8').read()
     assert os.path.exists(cbase + '.srt'), 'srt sidecar missing'
     assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
+    assert 'early' not in ass_txt, 'word from outside the clip leaked into the captions'
     hidden = W[iv2 + 2]['t'].strip().rstrip('.')
-    assert '{\\1c&H0000FF&}' in ass_txt, 'per-word colour tag missing or malformed (libass needs \\1c&HBBGGRR&)'
+    assert '\\1c&H0000FF&' in ass_txt, 'per-word colour tag missing or malformed (libass needs \\1c&HBBGGRR&)'
     assert f' {hidden}' not in ass_txt.split('[Events]')[1], f'hidden word {hidden!r} still in captions'
     # 'only marked parts' mode: mark just the two words after the coloured one; nothing else may be captioned
     r1 = {'a': W[iv2 + 3]['s'] - 0.02, 'b': W[iv2 + 4]['e'] + 0.02}
