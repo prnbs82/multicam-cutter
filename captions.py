@@ -8,13 +8,14 @@ _multicam/captions.json:
   font      family name resolved by fontconfig at burn time; maxChars per caption line (a block holds ~2 lines)
   mode      'all' = captions everywhere; 'ranges' = only inside the marked `ranges` [{a,b} master seconds] —
             attention captions for chosen parts, like shorts/reels
+  karaoke   light up the word being spoken (slightly larger, full-bright; the others dim a little)
   words     {"<index into words.json>": {"text": "shown instead of the spoken word ('' hides it)", "color": "#RRGGBB"}}
 The transcript corrections (double-click in the UI) apply to captions too; `words` overrides win over both.
 """
 import json, os
 from common import load_json, save_json, work_dir
 
-DEFAULTS = {'enabled': False, 'mode': 'all', 'ranges': [], 'sizePct': 4.5, 'color': '#FFFFFF', 'position': 'bottom',
+DEFAULTS = {'enabled': False, 'mode': 'all', 'ranges': [], 'karaoke': True, 'sizePct': 4.5, 'color': '#FFFFFF', 'position': 'bottom',
             'outline': True, 'bg': False, 'font': 'DejaVu Sans', 'maxChars': 42, 'words': {}}
 
 
@@ -50,14 +51,15 @@ def kept(words, intervals, corrections, doc, segs):
         mid = (w['s'] + w['e']) / 2
         if not any(a <= mid < b for a, b in intervals):
             continue
-        if marked is not None and not any(a <= mid < b for a, b in marked):
+        rid = next((k for k, (a, b) in enumerate(marked) if a <= mid < b), None) if marked is not None else -1
+        if marked is not None and rid is None:
             continue                             # 'only marked parts' mode: captions appear just where the user marked them
         o = ov.get(i, {})
         t = (o['text'] if 'text' in o else corrections.get(f"{w['s']:.3f}", w['t'])).strip()
         if not t:
             continue
         a = out_time(w['s'])
-        out.append({'i': i, 'a': a, 'b': max(out_time(w['e'], end=True), a + 0.05), 't': t, 'color': o.get('color')})
+        out.append({'i': i, 'a': a, 'b': max(out_time(w['e'], end=True), a + 0.05), 't': t, 'color': o.get('color'), 'rid': rid})
     return out
 
 
@@ -70,7 +72,9 @@ def blocks(kws, doc):
         if cur:
             gap = w['a'] - cur[-1]['b']
             ln = len(' '.join(x['t'] for x in cur))
-            if gap > 0.7 or ln + 1 + len(w['t']) > mx or (cur[-1]['t'][-1:] in '.?!' and ln >= 24 and gap > 0.15):
+            # a block must never bridge two separate marked ranges — the words in between were not marked,
+            # and joining the marks would read as a sentence nobody said
+            if w.get('rid') != cur[-1].get('rid') or gap > 0.7 or ln + 1 + len(w['t']) > mx or (cur[-1]['t'][-1:] in '.?!' and ln >= 24 and gap > 0.15):
                 groups.append(cur)
                 cur = []
         cur.append(w)
@@ -132,14 +136,32 @@ def write_ass(path, bl, doc):
              'Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, '
              'MarginL, MarginR, MarginV, Encoding', style, '', '[Events]',
              'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text']
+    def word_tag(w, active):
+        """Inline override tags for one word: its colour, plus emphasis (active) or a slight dim (karaoke inactive)."""
+        tags = ''
+        if active:
+            tags += '\\fscx112\\fscy112'
+        elif active is False:                    # karaoke mode, not the spoken word: a touch transparent
+            tags += '\\alpha&H38&'
+        if w.get('color'):
+            tags += '\\1c' + _ass_color(w['color'])[2:] + '&'
+        return ('{' + tags + '}' + _esc(w['t']) + '{\\r}') if tags else _esc(w['t'])
+
+    kar = doc.get('karaoke', True)
     for b in bl:
-        parts = []
-        for w in b['words']:
-            if w.get('color'):
-                parts.append('{\\1c' + _ass_color(w['color'])[2:] + '&}' + _esc(w['t']) + '{\\r}')
-            else:
-                parts.append(_esc(w['t']))
-        lines.append(f"Dialogue: 0,{_ass_t(b['a'])},{_ass_t(b['b'])},Default,,0,0,0,," + ' '.join(parts))
+        ws = b['words']
+        if not kar or len(ws) == 1:
+            lines.append(f"Dialogue: 0,{_ass_t(b['a'])},{_ass_t(b['b'])},Default,,0,0,0,," + ' '.join(word_tag(w, None) for w in ws))
+            continue
+        # karaoke: one event per spoken word, the active word emphasised; a final plain event covers the block's tail
+        for i, w in enumerate(ws):
+            ea = max(b['a'], w['a']) if i else b['a']
+            eb = ws[i + 1]['a'] if i + 1 < len(ws) else min(b['b'], ws[-1]['b'])
+            if eb - ea < 0.01:
+                continue
+            lines.append(f"Dialogue: 0,{_ass_t(ea)},{_ass_t(eb)},Default,,0,0,0,," + ' '.join(word_tag(x, x is w) for x in ws))
+        if b['b'] - ws[-1]['b'] > 0.05:
+            lines.append(f"Dialogue: 0,{_ass_t(ws[-1]['b'])},{_ass_t(b['b'])},Default,,0,0,0,," + ' '.join(word_tag(w, None) for w in ws))
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
     return path

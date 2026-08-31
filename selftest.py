@@ -295,8 +295,9 @@ try:
     assert '\\1c&HFF&' in ass_txt.replace('&H0000FF&', '&HFF&') or '0000FF' in ass_txt, 'per-word colour tag missing'
     assert f' {hidden}' not in ass_txt.split('[Events]')[1], f'hidden word {hidden!r} still in captions'
     # 'only marked parts' mode: mark just the two words after the coloured one; nothing else may be captioned
-    ra, rb = W[iv2 + 3]['s'] - 0.02, W[iv2 + 4]['e'] + 0.02
-    st, h, b = req('/api/captions', 'PUT', {'mode': 'ranges', 'ranges': [{'a': ra, 'b': rb}], 'words': {}}); assert st == 200
+    r1 = {'a': W[iv2 + 3]['s'] - 0.02, 'b': W[iv2 + 4]['e'] + 0.02}
+    r2 = {'a': W[iv2 + 6]['s'] - 0.02, 'b': W[iv2 + 7]['e'] + 0.02}     # second mark, one unmarked word in between
+    st, h, b = req('/api/captions', 'PUT', {'mode': 'ranges', 'ranges': [r1, r2], 'words': {}}); assert st == 200
     st, h, b = req('/api/render', 'POST', {'clip': 'History of memory', 'tighten': True}); assert st == 200
     t0 = time.time()
     while True:
@@ -306,8 +307,10 @@ try:
         time.sleep(1)
     assert S['state'] == 'done', S
     ev = open(cbase + '.ass', encoding='utf-8').read().split('[Events]')[1]
-    inw, outw = W[iv2 + 3]['t'].strip().rstrip('.'), W[iv2]['t'].strip().rstrip('.')
-    assert inw in ev and outw not in ev, (inw, outw, ev[-300:])
+    inw, in2, outw = W[iv2 + 3]['t'].strip().rstrip('.'), W[iv2 + 6]['t'].strip().rstrip('.'), W[iv2]['t'].strip().rstrip('.')
+    assert inw in ev and in2 in ev and outw not in ev, (inw, in2, outw, ev[-300:])
+    assert not any(inw in l and in2 in l for l in ev.splitlines()), 'two marked ranges merged into one caption line'
+    assert '\\fscx112' in ev, 'karaoke emphasis missing'
     req('/api/captions', 'PUT', {'enabled': False, 'mode': 'all', 'ranges': [], 'words': {}})
     print('captions OK (sidecars, word colour + replacement + hide, burn frame-exact, marked-parts mode)')
     print('SELFTEST PASSED')
