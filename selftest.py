@@ -273,8 +273,8 @@ try:
     print('broll render OK (full-frame + PiP pieces, credits in txt)')
 
     # ---- captions: colour one word, replace one, hide one; sidecars written; burn-in keeps the export frame-exact
-    st, h, b = req('/api/words'); W = json.loads(b)['words']
-    iv2 = next(i for i, w in enumerate(W) if w['t'].strip().rstrip('.') == 'v2')
+    st, h, b = req('/api/words?a=0&b=100000'); W = json.loads(b)['words']
+    iv2 = next(i for i, w in enumerate(W) if w['t'].strip().rstrip('.') in ('vacuum', 'v2'))   # broll section swapped in its own words
     st, h, b = req('/api/captions', 'PUT', {'enabled': True, 'sizePct': 5.0, 'color': '#FFFFFF', 'position': 'bottom',
                                             'words': {str(iv2): {'color': '#FF0000'}, str(iv2 + 1): {'text': 'REPLACED'}, str(iv2 + 2): {'text': ''}}})
     assert st == 200
@@ -287,9 +287,9 @@ try:
         if time.time() - t0 > 600: raise SystemExit('captions render timeout')
         time.sleep(1)
     assert S['state'] == 'done', S
-    base = os.path.join(ld, 'clips', 'History of memory')
-    ass_txt = open(base + '.ass', encoding='utf-8').read()
-    assert os.path.exists(base + '.srt'), 'srt sidecar missing'
+    cbase = os.path.join(ld, 'clips', 'History of memory')
+    ass_txt = open(cbase + '.ass', encoding='utf-8').read()
+    assert os.path.exists(cbase + '.srt'), 'srt sidecar missing'
     assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
     hidden = W[iv2 + 2]['t'].strip().rstrip('.')
     assert '\\1c&HFF&' in ass_txt.replace('&H0000FF&', '&HFF&') or '0000FF' in ass_txt, 'per-word colour tag missing'
