@@ -738,13 +738,26 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
                 tt += ln
             cblocks = cap.blocks(cap.kept(words, intervals, tdoc.get('corrections', {}), capdoc, segs), capdoc)
             if cblocks:
-                base = os.path.splitext(out)[0]
+                from hw import ffmpeg_filters
+                burn = capdoc.get('enabled') and 'ass' in ffmpeg_filters()
+                # burned exports keep their sidecars in a captions/ subfolder: next to the .mp4 a video player
+                # auto-loads the .srt and draws a SECOND set of subtitles over the burned ones
+                if burn:
+                    capdir = os.path.join(os.path.dirname(out) or '.', 'captions')
+                    os.makedirs(capdir, exist_ok=True)
+                    base = os.path.join(capdir, os.path.splitext(os.path.basename(out))[0])
+                    for ext in ('.srt', '.ass'):   # a sidecar from an earlier non-burned render would still double the captions
+                        try:
+                            os.remove(os.path.splitext(out)[0] + ext)
+                        except FileNotFoundError:
+                            pass
+                else:
+                    base = os.path.splitext(out)[0]
                 cap.write_srt(base + '.srt', cblocks)
                 asspath = cap.write_ass(base + '.ass', cblocks, capdoc)
-                print(f'captions: {len(cblocks)} blocks -> {os.path.basename(base)}.srt/.ass')
+                print(f'captions: {len(cblocks)} blocks -> {base}.srt/.ass')
                 if capdoc.get('enabled'):
-                    from hw import ffmpeg_filters
-                    if 'ass' in ffmpeg_filters():
+                    if burn:
                         status(state='captions', target=target, progress=0.95, message='burning captions into the picture')
                         tmp2 = out + '.cc.mp4'
                         # run from the .ass directory so the filter argument is a simple relative name

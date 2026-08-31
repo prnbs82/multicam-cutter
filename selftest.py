@@ -287,7 +287,8 @@ try:
         if time.time() - t0 > 600: raise SystemExit('captions render timeout')
         time.sleep(1)
     assert S['state'] == 'done', S
-    cbase = os.path.join(ld, 'clips', 'History of memory')
+    cbase = os.path.join(ld, 'clips', 'captions', 'History of memory')     # burned exports keep sidecars out of the player's reach
+    assert not os.path.exists(os.path.join(ld, 'clips', 'History of memory.srt')), 'sidecar next to a burned export (players would double the captions)'
     ass_txt = open(cbase + '.ass', encoding='utf-8').read()
     assert os.path.exists(cbase + '.srt'), 'srt sidecar missing'
     assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
