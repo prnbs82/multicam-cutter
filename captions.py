@@ -103,10 +103,17 @@ def _ass_t(t):
 
 
 def _ass_color(hexs, alpha='00'):
-    """'#RRGGBB' -> ASS '&HAABBGGRR' (little-endian colour, AA = transparency)."""
+    """'#RRGGBB' -> ASS '&HAABBGGRR' (little-endian colour, AA = transparency) for the style table."""
     h = (hexs or '#FFFFFF').lstrip('#')
     h = h if len(h) == 6 else 'FFFFFF'
     return f'&H{alpha}{h[4:6]}{h[2:4]}{h[0:2]}'.upper()
+
+
+def _ass_ctag(hexs):
+    """'#RRGGBB' -> inline colour override '\\1c&HBBGGRR&' (the tag form libass expects — no alpha byte)."""
+    h = (hexs or '#FFFFFF').lstrip('#')
+    h = h if len(h) == 6 else 'FFFFFF'
+    return ('\\1c&H' + h[4:6] + h[2:4] + h[0:2] + '&').upper().replace('\\1C', '\\1c')
 
 
 def _esc(t):
@@ -144,7 +151,7 @@ def write_ass(path, bl, doc):
         elif active is False:                    # karaoke mode, not the spoken word: a touch transparent
             tags += '\\alpha&H38&'
         if w.get('color'):
-            tags += '\\1c' + _ass_color(w['color'])[2:] + '&'
+            tags += _ass_ctag(w['color'])
         return ('{' + tags + '}' + _esc(w['t']) + '{\\r}') if tags else _esc(w['t'])
 
     kar = doc.get('karaoke', True)

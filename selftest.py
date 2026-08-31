@@ -48,7 +48,7 @@ def req(path, method='GET', body=None, headers={}):
     with urllib.request.urlopen(r) as resp:
         return resp.status, dict(resp.headers), resp.read()
 try:
-    for _ in range(50):
+    for _ in range(300):                      # up to 60 s: a loaded machine (or CI runner) can be slow to start the server
         try: req('/'); break
         except Exception: time.sleep(0.2)
     st, h, b = req('/'); assert st == 200 and b'Multicam Cutter' in b, 'index'
@@ -293,7 +293,7 @@ try:
     assert os.path.exists(cbase + '.srt'), 'srt sidecar missing'
     assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
     hidden = W[iv2 + 2]['t'].strip().rstrip('.')
-    assert '\\1c&HFF&' in ass_txt.replace('&H0000FF&', '&HFF&') or '0000FF' in ass_txt, 'per-word colour tag missing'
+    assert '{\\1c&H0000FF&}' in ass_txt, 'per-word colour tag missing or malformed (libass needs \\1c&HBBGGRR&)'
     assert f' {hidden}' not in ass_txt.split('[Events]')[1], f'hidden word {hidden!r} still in captions'
     # 'only marked parts' mode: mark just the two words after the coloured one; nothing else may be captioned
     r1 = {'a': W[iv2 + 3]['s'] - 0.02, 'b': W[iv2 + 4]['e'] + 0.02}
