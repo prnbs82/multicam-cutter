@@ -294,8 +294,22 @@ try:
     hidden = W[iv2 + 2]['t'].strip().rstrip('.')
     assert '\\1c&HFF&' in ass_txt.replace('&H0000FF&', '&HFF&') or '0000FF' in ass_txt, 'per-word colour tag missing'
     assert f' {hidden}' not in ass_txt.split('[Events]')[1], f'hidden word {hidden!r} still in captions'
-    req('/api/captions', 'PUT', {'enabled': False, 'words': {}})
-    print('captions OK (srt+ass sidecars, word colour + replacement + hide, burned pass frame-exact)')
+    # 'only marked parts' mode: mark just the two words after the coloured one; nothing else may be captioned
+    ra, rb = W[iv2 + 3]['s'] - 0.02, W[iv2 + 4]['e'] + 0.02
+    st, h, b = req('/api/captions', 'PUT', {'mode': 'ranges', 'ranges': [{'a': ra, 'b': rb}], 'words': {}}); assert st == 200
+    st, h, b = req('/api/render', 'POST', {'clip': 'History of memory', 'tighten': True}); assert st == 200
+    t0 = time.time()
+    while True:
+        st, h, b = req('/api/render/status'); S = json.loads(b)
+        if S.get('state') in ('done', 'error') and not S.get('running'): break
+        if time.time() - t0 > 600: raise SystemExit('ranged captions render timeout')
+        time.sleep(1)
+    assert S['state'] == 'done', S
+    ev = open(cbase + '.ass', encoding='utf-8').read().split('[Events]')[1]
+    inw, outw = W[iv2 + 3]['t'].strip().rstrip('.'), W[iv2]['t'].strip().rstrip('.')
+    assert inw in ev and outw not in ev, (inw, outw, ev[-300:])
+    req('/api/captions', 'PUT', {'enabled': False, 'mode': 'all', 'ranges': [], 'words': {}})
+    print('captions OK (sidecars, word colour + replacement + hide, burn frame-exact, marked-parts mode)')
     print('SELFTEST PASSED')
 except BaseException:
     print('\n--- server log (last 60 lines) ---')

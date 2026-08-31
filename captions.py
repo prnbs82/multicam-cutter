@@ -6,14 +6,16 @@ _multicam/captions.json:
   sizePct   font size as % of the frame height (4.5 -> ~49 px at 1080p)
   color     base text colour '#RRGGBB'; position 'bottom'|'top'; outline (black rim); bg (dark box behind the text)
   font      family name resolved by fontconfig at burn time; maxChars per caption line (a block holds ~2 lines)
+  mode      'all' = captions everywhere; 'ranges' = only inside the marked `ranges` [{a,b} master seconds] —
+            attention captions for chosen parts, like shorts/reels
   words     {"<index into words.json>": {"text": "shown instead of the spoken word ('' hides it)", "color": "#RRGGBB"}}
 The transcript corrections (double-click in the UI) apply to captions too; `words` overrides win over both.
 """
 import json, os
 from common import load_json, save_json, work_dir
 
-DEFAULTS = {'enabled': False, 'sizePct': 4.5, 'color': '#FFFFFF', 'position': 'bottom', 'outline': True, 'bg': False,
-            'font': 'DejaVu Sans', 'maxChars': 42, 'words': {}}
+DEFAULTS = {'enabled': False, 'mode': 'all', 'ranges': [], 'sizePct': 4.5, 'color': '#FFFFFF', 'position': 'bottom',
+            'outline': True, 'bg': False, 'font': 'DejaVu Sans', 'maxChars': 42, 'words': {}}
 
 
 def load(wd):
@@ -42,11 +44,14 @@ def kept(words, intervals, corrections, doc, segs):
             prev_end = o + (b - a)
         return prev_end
 
+    marked = [(float(r['a']), float(r['b'])) for r in (doc.get('ranges') or [])] if doc.get('mode') == 'ranges' else None
     out = []
     for i, w in enumerate(words):
         mid = (w['s'] + w['e']) / 2
         if not any(a <= mid < b for a, b in intervals):
             continue
+        if marked is not None and not any(a <= mid < b for a, b in marked):
+            continue                             # 'only marked parts' mode: captions appear just where the user marked them
         o = ov.get(i, {})
         t = (o['text'] if 'text' in o else corrections.get(f"{w['s']:.3f}", w['t'])).strip()
         if not t:

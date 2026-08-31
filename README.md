@@ -98,7 +98,9 @@ Full-frame (optional slow zoom) or picture-in-picture (corner and size). **Expor
 
 **Captions**: the row under ✨ in Tab 1. Every export gets `.srt` and styled `.ass` subtitle files;
 switch **🅲 Captions in the video** on to burn them into the picture. Size, colour and top/bottom are
-in the row; **right-click any word** in the transcript to give it a colour, change what the caption
+in the row. Captions can cover the whole video or **only the parts you mark** (select words →
+right-click → **🅲 captions on for “…”**) — attention captions the way shorts/reels use them; marked
+words are underlined in the transcript. **Right-click any word** to give it a colour, change what the caption
 shows (the audio is untouched), or hide it from the captions. The preview players show the result live.
 
 Exports go to `<lecture>/clips/<clip name>.mp4` (+ `.txt` with the transcript and image credits,
