@@ -271,6 +271,31 @@ try:
     bl = np.abs(o[70:104, 4:52] - cam[70:104, 4:52]).mean(); tr = np.abs(o[4:40, 140:188] - cam[4:40, 140:188]).mean()
     print(f'PiP position check: bottom-left diff {bl:.1f} (image there) vs top-right diff {tr:.1f} (camera there)'); assert bl > 15 and tr < 8, (bl, tr)
     print('broll render OK (full-frame + PiP pieces, credits in txt)')
+
+    # ---- captions: colour one word, replace one, hide one; sidecars written; burn-in keeps the export frame-exact
+    st, h, b = req('/api/words'); W = json.loads(b)['words']
+    iv2 = next(i for i, w in enumerate(W) if w['t'].strip().rstrip('.') == 'v2')
+    st, h, b = req('/api/captions', 'PUT', {'enabled': True, 'sizePct': 5.0, 'color': '#FFFFFF', 'position': 'bottom',
+                                            'words': {str(iv2): {'color': '#FF0000'}, str(iv2 + 1): {'text': 'REPLACED'}, str(iv2 + 2): {'text': ''}}})
+    assert st == 200
+    st, h, b = req('/api/captions'); C = json.loads(b); assert C['enabled'] is True and C['words'][str(iv2)]['color'] == '#FF0000', C
+    st, h, b = req('/api/render', 'POST', {'clip': 'History of memory', 'tighten': True}); assert st == 200
+    t0 = time.time()
+    while True:
+        st, h, b = req('/api/render/status'); S = json.loads(b)
+        if S.get('state') in ('done', 'error') and not S.get('running'): break
+        if time.time() - t0 > 600: raise SystemExit('captions render timeout')
+        time.sleep(1)
+    assert S['state'] == 'done', S
+    base = os.path.join(ld, 'clips', 'History of memory')
+    ass_txt = open(base + '.ass', encoding='utf-8').read()
+    assert os.path.exists(base + '.srt'), 'srt sidecar missing'
+    assert 'REPLACED' in ass_txt, 'caption word replacement missing from .ass'
+    hidden = W[iv2 + 2]['t'].strip().rstrip('.')
+    assert '\\1c&HFF&' in ass_txt.replace('&H0000FF&', '&HFF&') or '0000FF' in ass_txt, 'per-word colour tag missing'
+    assert f' {hidden}' not in ass_txt.split('[Events]')[1], f'hidden word {hidden!r} still in captions'
+    req('/api/captions', 'PUT', {'enabled': False, 'words': {}})
+    print('captions OK (srt+ass sidecars, word colour + replacement + hide, burned pass frame-exact)')
     print('SELFTEST PASSED')
 except BaseException:
     print('\n--- server log (last 60 lines) ---')

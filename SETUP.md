@@ -21,7 +21,7 @@ GPUs are optional (see §6).
 
 | Dependency | Required? | Version | Purpose | Install |
 |---|---|---|---|---|
-| `ffmpeg` + `ffprobe` | **required** | ≥ 4.4 (5.x/6.x/7.x fine), must include `libx264`, `aac`, filters `xfade`, `tpad`, `zoompan`, `drawtext` (needs libfreetype), `lavfi` | all video/audio processing | `sudo apt install ffmpeg` · `brew install ffmpeg` · `sudo dnf install ffmpeg` (Fedora: enable RPM Fusion) |
+| `ffmpeg` + `ffprobe` | **required** | ≥ 4.4 (5.x/6.x/7.x fine), must include `libx264`, `aac`, filters `xfade`, `tpad`, `zoompan`, `drawtext` (needs libfreetype), `ass` (libass, for burned-in captions; sidecars work without it), `lavfi` | all video/audio processing | `sudo apt install ffmpeg` · `brew install ffmpeg` · `sudo dnf install ffmpeg` (Fedora: enable RPM Fusion) |
 | Python | **required** | **3.10, 3.11 or 3.12** (not 3.13+: no mediapipe wheels) | everything | `sudo apt install python3 python3-venv python3-pip` · `brew install python@3.12` |
 | `curl` | required by launcher | any | readiness check | usually preinstalled |
 | `lsof` or `fuser` (psmisc) | recommended | any | launcher stops a stale server on the port | `sudo apt install lsof` (macOS has lsof) |

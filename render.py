@@ -726,6 +726,35 @@ def render(lecture_dir, out=None, workers=4, clip=None, tighten=False):
              '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
              '-movflags', '+faststart', tmp])
         vinfo = verify_output(tmp, expected_frames, total_len)
+        # captions: .srt/.ass sidecars are always written; when enabled the .ass is burned in (one finishing pass, re-verified)
+        if words:
+            import captions as cap
+            capdoc = cap.load(wd)
+            segs, tt = [], 0.0
+            for it in vitems:
+                ln = frames_of(it) / OFPS
+                if it['type'] == 'video':
+                    segs.append((it['piece']['a'], it['piece']['b'], tt))
+                tt += ln
+            cblocks = cap.blocks(cap.kept(words, intervals, tdoc.get('corrections', {}), capdoc, segs), capdoc)
+            if cblocks:
+                base = os.path.splitext(out)[0]
+                cap.write_srt(base + '.srt', cblocks)
+                asspath = cap.write_ass(base + '.ass', cblocks, capdoc)
+                print(f'captions: {len(cblocks)} blocks -> {os.path.basename(base)}.srt/.ass')
+                if capdoc.get('enabled'):
+                    from hw import ffmpeg_filters
+                    if 'ass' in ffmpeg_filters():
+                        status(state='captions', target=target, progress=0.95, message='burning captions into the picture')
+                        tmp2 = out + '.cc.mp4'
+                        # run from the .ass directory so the filter argument is a simple relative name
+                        run(['ffmpeg', '-y', '-v', 'error', '-i', tmp, '-vf', 'ass=' + cap.filter_escape(os.path.basename(asspath)) + VTAIL,
+                             *X264, '-c:a', 'copy', '-movflags', '+faststart', tmp2], cwd=os.path.dirname(asspath) or '.')
+                        verify_output(tmp2, expected_frames, total_len)
+                        os.replace(tmp2, tmp)
+                        print(f'captions burned in ({len(cblocks)} blocks)')
+                    else:
+                        warn.append('this ffmpeg cannot burn captions (built without libass) — the .srt/.ass files are next to the export')
         os.replace(tmp, out)
         print('verified:', vinfo)
         if words:

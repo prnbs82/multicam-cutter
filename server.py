@@ -219,6 +219,9 @@ def make_handler(lecture_dir):
                 from hw import load_config
                 k = {**(load_json(os.path.join(wd, 'keys.json'), {}) or {}), **(load_config('keys.json', {}) or {})}
                 return self.send_json({name: (v[:4] + '…' + v[-4:] if isinstance(v, str) and len(v) > 8 else ('set' if v else '')) for name, v in k.items()})
+            if p == '/api/captions':
+                from captions import load as cap_load
+                return self.send_json(cap_load(wd))
             if p == '/api/ai':
                 from llm import provider_status
                 return self.send_json(provider_status())
@@ -310,6 +313,12 @@ def make_handler(lecture_dir):
                     save_config('keys.json', k)
                     if os.path.exists(os.path.join(wd, 'keys.json')):
                         save_json(os.path.join(wd, 'keys.json'), legacy)
+                return self.send_json({'ok': True})
+            if p == '/api/captions':             # PUT the whole captions doc (settings + per-word overrides)
+                data = self.read_body()
+                from captions import save as cap_save, load as cap_load
+                with lock:
+                    cap_save(wd, {**cap_load(wd), **data})
                 return self.send_json({'ok': True})
             if p == '/api/ai':                   # PUT {provider, base_url, model, api_key?}  (api_key omitted = keep, '' = remove)
                 data = self.read_body()

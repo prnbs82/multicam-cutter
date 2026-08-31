@@ -96,7 +96,13 @@ Pick a clip → **Suggest images**. Each card shows the sentence, the picture an
 picture at the current moment. Preview scrubs around the image; **⟲** loops the transition.
 Full-frame (optional slow zoom) or picture-in-picture (corner and size). **Export** from here too.
 
-Exports go to `<lecture>/clips/<clip name>.mp4` (+ `.txt` with the transcript and image credits).
+**Captions**: the row under ✨ in Tab 1. Every export gets `.srt` and styled `.ass` subtitle files;
+switch **🅲 Captions in the video** on to burn them into the picture. Size, colour and top/bottom are
+in the row; **right-click any word** in the transcript to give it a colour, change what the caption
+shows (the audio is untouched), or hide it from the captions. The preview players show the result live.
+
+Exports go to `<lecture>/clips/<clip name>.mp4` (+ `.txt` with the transcript and image credits,
+`.srt`/`.ass` captions).
 
 ## Hardware: what runs where
 

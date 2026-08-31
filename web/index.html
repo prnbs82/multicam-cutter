@@ -258,6 +258,7 @@ td .mini{padding:1px 6px;font-size:11px}
     <div id="tPgmWrap"><canvas id="tPgm" width="960" height="540"></canvas><div id="tPgmLabel" class="pgmLabel">—</div></div>
     <div class="trow"><button id="tPlay" class="primary" title="Space">▶ Play</button><button id="tBack" title="J">−5s</button><button id="tFwd" title="L">+5s</button><span id="tTc">00:00 / 00:00</span><label class="chk"><input type="checkbox" id="tFollow" checked> follow</label><label class="chk adv" title="paragraph tints and topic chips in the transcript"><input type="checkbox" id="tShowTopics" checked> topic colours</label><label class="chk adv">speed <select id="tSpeed"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option></select></label></div>
     <div class="trow"><button id="tAuto" class="primary bigbtn" title="shortens long pauses and removes filler words (um, uh, you know…) in one go; the app then makes every cut sound and look natural">✨ Tighten automatically</button><button id="tUndo2" title="Ctrl+Z">↶ Undo</button><button id="tRedo2" title="Ctrl+Shift+Z">↷ Redo</button><span id="tAutoInfo" style="color:var(--muted)"></span></div>
+    <div class="trow" title="Subtitles built from the transcript. Always written next to the export as .srt and styled .ass files; with this ON they are also burned into the picture. Right-click a word in the transcript to colour it or change what the caption shows."><label class="chk"><input type="checkbox" id="ccOn"> 🅲 Captions in the video</label> size <input type="range" id="ccSize" min="2.5" max="8" step="0.25" value="4.5" style="width:80px"><span id="ccSizeV">4.5</span>% · colour <input type="color" id="ccColor" value="#FFFFFF" style="width:34px;height:22px;padding:0;border:none;background:none"> · <select id="ccPos"><option value="bottom">bottom</option><option value="top">top</option></select><span class="adv"> · <label class="chk"><input type="checkbox" id="ccOutline" checked> outline</label><label class="chk"><input type="checkbox" id="ccBg"> dark box</label> · line <input type="number" id="ccMax" min="20" max="80" value="42" style="width:52px"> chars</span> <span style="color:var(--muted)">right-click a word → colour / change its caption</span></div>
     <div class="trow adv">pauses longer than <input type="number" id="tPauseThr" step="0.1" min="0.2" value="0.7"> s → shorten to <input type="number" id="tPauseIn" step="0.05" min="0.1" value="0.30"> s in-sentence · <input type="number" id="tPauseEnd" step="0.05" min="0.1" value="0.55"> s after a sentence <button id="tRemovePauses">Remove pauses</button><button id="tAcceptFillers">Accept fillers</button></div>
     <div class="trow adv" title="Joins where the same camera continues: pause joins get a dissolve built from the removed footage (this adds the micro pause back); word joins hold the last frame briefly under a dissolve. Camera changes are hard cuts.">joins: dissolve <input type="number" id="tDissolve" step="1" min="0" max="15" value="6"> frames · word joins hold <input type="number" id="tHold" step="10" min="0" max="500" value="120"> ms <span id="tJoinStats"></span></div>
     <div class="trow adv" title="Every export (clip or full video) fades in from black and ends with the last frame held over room tone while fading to black. Clips additionally keep real footage before the first word and after the last word while the audio is quiet.">export edges: fade in <input type="number" id="tFadeIn" step="0.1" min="0" max="3" value="0.3"> s · ending hold + fade out <input type="number" id="tTail" step="0.1" min="0" max="5" value="0.8"> s · clips keep <input type="number" id="tStartLead" step="0.1" min="0" max="3" value="0.3"> s before the first word and <input type="number" id="tEndHold" step="0.1" min="0" max="5" value="1.0"> s after the last word</div>
@@ -636,6 +637,7 @@ function drawProgramTo(canvas, label, t){
   if(a && mv.readyState>=2){ try{ if(cr && cr.w<0.999){ cx.drawImage(mv, a.x+cr.x*a.w, a.y+cr.y*a.h, cr.w*a.w, cr.w*a.h, 0,0,canvas.width,canvas.height); } else cx.drawImage(mv, a.x,a.y,a.w,a.h, 0,0,canvas.width,canvas.height); }catch(e){} label.textContent=a.name+(cr&&cr.w<0.999?` · ${(1/cr.w).toFixed(2)}×`:''); label.style.background=a.color;
     if(imOv){ drawImageOverlay(cx,canvas,imOv,t); label.textContent=(imOv.mode==='pip'?a.name+' + image':'image')+` · ${imOv.query||''}`; }
     if(BL.active){ const k=Math.min(1,(performance.now()-BL.active.t0)/BL.active.ms); cx.globalAlpha=1-k; try{ cx.drawImage(BL.canvas,0,0,canvas.width,canvas.height); }catch(e){} cx.globalAlpha=1; label.textContent=a.name+(BL.active.type==='dissolve'?' · dissolve':BL.active.type==='morph'?' · morph (preview shows a blend)':' · hold'); }
+    if(CC.doc.enabled) drawCaption(cx,canvas,t);
     if(!covered(a.id,t)){ cx.fillStyle='rgba(0,0,0,.6)'; cx.fillRect(0,0,canvas.width,canvas.height); cx.fillStyle='#f85149'; cx.font='bold 22px system-ui'; cx.textAlign='center'; cx.fillText('NO SIGNAL — render will use fallback', canvas.width/2, canvas.height/2); } }
   else { label.textContent=cam?cam:'no cut yet — press a camera key'; label.style.background='#666'; }
 }
@@ -1053,7 +1055,18 @@ function initTighten(){
     pushUndo(); S.clips=[]; S.selClip=null; if(S.scope) S.scope=null; changed(); tRender(true); toast('all clips removed — restore via the checkpoint dropdown if needed', 4000); };
   txt.addEventListener('dblclick', e=>{ const w=e.target.closest('.w'); if(!w) return; tEditWord(w); });
   txt.addEventListener('contextmenu', e=>{ const wEl=e.target.closest('.w'); if(wEl && !wEl.classList.contains('rm')){ e.preventDefault(); const i=+wEl.dataset.i; const i0=(T.sel&&i>=T.sel.i0&&i<=T.sel.i1)?T.sel.i0:i, i1=(T.sel&&i>=T.sel.i0&&i<=T.sel.i1)?T.sel.i1:i;
-      const m=$('#ctx'); m.innerHTML=`<div data-act="img">🖼 find an image for “${escapeHtml(T.words.slice(i0,i1+1).map(w=>w.t).join(' ').slice(0,40))}”</div>`; m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; m.onclick=ev=>{ m.style.display='none'; if(ev.target.closest('div[data-act=img]')) bFindFromWords(i0,i1); }; return; }
+      const sel=escapeHtml(T.words.slice(i0,i1+1).map(w=>w.t).join(' ').slice(0,40)); const cur=CC.doc.words[i0]||{};
+      const m=$('#ctx'); m.innerHTML=`<div data-act="img">🖼 find an image for “${sel}”</div>`
+        +(i0===i1?`<div data-act="cctext">✏️ caption text for “${sel}”…</div>`:'')
+        +`<div data-act="cchide">🚫 hide in captions</div>`
+        +`<div style="display:flex;gap:7px;align-items:center;padding:5px 12px">🎨 caption colour ${['#FFD34D','#FF6B6B','#6BB6FF','#7EE787','#FFFFFF'].map(c=>`<span data-cc="${c}" style="width:15px;height:15px;border-radius:50%;background:${c};cursor:pointer;border:1px solid #888;display:inline-block"></span>`).join('')}<span data-cc="none" style="cursor:pointer" title="remove the colour">✖</span></div>`;
+      m.style.display='block'; m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px';
+      m.onclick=ev=>{ m.style.display='none'; const sw=ev.target.closest('[data-cc]');
+        if(sw){ for(let k=i0;k<=i1;k++){ const o=CC.doc.words[k]||{}; if(sw.dataset.cc==='none') delete o.color; else o.color=sw.dataset.cc; if(Object.keys(o).length) CC.doc.words[k]=o; else delete CC.doc.words[k]; } ccSave(); toast(sw.dataset.cc==='none'?'caption colour removed':'caption colour set — shown in the preview and the export'); return; }
+        if(ev.target.closest('div[data-act=cctext]')){ const v=prompt('Caption text for this word (empty hides it in captions; the audio is unchanged)', 'text' in cur?cur.text:T.words[i0].t.trim()); if(v!==null){ const o=CC.doc.words[i0]||{}; o.text=v.trim(); CC.doc.words[i0]=o; ccSave(); toast(v.trim()?'caption text changed':'word hidden in captions'); } return; }
+        if(ev.target.closest('div[data-act=cchide]')){ for(let k=i0;k<=i1;k++){ const o=CC.doc.words[k]||{}; o.text=''; CC.doc.words[k]=o; } ccSave(); toast('hidden in captions'); return; }
+        if(ev.target.closest('div[data-act=img]')) bFindFromWords(i0,i1); };
+      return; }
     const el=e.target.closest('.w.rm, .pz.rm'); if(!el) return; e.preventDefault();
     let t; if(el.classList.contains('pz')){ const p=tPauses().find(p=>p.i===+el.dataset.i); if(!p) return; t=(p.a+p.b)/2; } else t=(T.words[+el.dataset.i].s+T.words[+el.dataset.i].e)/2;
     const r=inRemoved(t); if(!r) return; const j=joinAt(r[1]); if(!j){ toast('this removal reaches the end — no join here'); return; }
@@ -1375,6 +1388,37 @@ async function bFind(){ const c=bClip(); const q=$('#bQuery').value.trim(); if(!
   }catch(e){ toast(String(e.message||e),5000); } $('#bFindState').textContent=''; $('#bFind').disabled=false; }
 $('#bFind').onclick=bFind;
 // ---- AI assistant settings (used for topic names and image-moment suggestions)
+// ================================================================ captions (styled subtitles; per-word colour/text overrides)
+// CC.doc mirrors _multicam/captions.json; CC.blocks is the preview grouping in master time (rebuilt after any edit)
+const CC={doc:{enabled:false,sizePct:4.5,color:'#FFFFFF',position:'bottom',outline:true,bg:false,maxChars:42,words:{}},blocks:null,bi:0};
+// fetch captions.json and reflect it in the controls
+async function loadCaptions(){ try{ CC.doc={...CC.doc,...await (await fetch('/api/captions')).json()}; CC.blocks=null; ccBind(); }catch(e){} }
+let ccTimer=null;
+// debounce-save the whole captions doc and invalidate the preview blocks
+function ccSave(){ CC.blocks=null; clearTimeout(ccTimer); ccTimer=setTimeout(()=>{ fetch('/api/captions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(CC.doc)}); },400); }
+// push CC.doc values into the Captions row controls
+function ccBind(){ $('#ccOn').checked=!!CC.doc.enabled; $('#ccSize').value=CC.doc.sizePct; $('#ccSizeV').textContent=CC.doc.sizePct; $('#ccColor').value=CC.doc.color; $('#ccPos').value=CC.doc.position; $('#ccOutline').checked=!!CC.doc.outline; $('#ccBg').checked=!!CC.doc.bg; $('#ccMax').value=CC.doc.maxChars; }
+['ccOn:enabled:checked','ccSize:sizePct:value','ccColor:color:value','ccPos:position:value','ccOutline:outline:checked','ccBg:bg:checked','ccMax:maxChars:value'].forEach(sp=>{ const [id,key,prop]=sp.split(':'); $('#'+id).addEventListener('input',e=>{ let v=prop==='checked'?e.target.checked:e.target.value; if(key==='sizePct'||key==='maxChars') v=+v; CC.doc[key]=v; if(id==='ccSize') $('#ccSizeV').textContent=v; ccSave(); }); });
+// kept (non-removed) words as caption entries {i,a,b,t,color} in master time; text = override ?? correction ?? spoken word
+function ccKept(){ const out=[], corr=(T.doc&&T.doc.corrections)||T.corrections||{}; for(let i=0;i<(T.words||[]).length;i++){ if(tIsRemoved(i)) continue; const w=T.words[i], o=CC.doc.words[i]||{}; const t=(('text' in o)?o.text:((corr[w.s.toFixed(3)]!==undefined?corr[w.s.toFixed(3)]:w.t))).trim(); if(!t) continue; out.push({i,a:w.s,b:w.e,t,color:o.color}); } return out; }
+// group entries into caption blocks: break at pauses > 0.7 s, sentence ends, and ~2 lines of maxChars (same rule as captions.py)
+function ccBlocks(){ if(CC.blocks) return CC.blocks; const kws=ccKept(), mx=Math.max(20,+CC.doc.maxChars||42)*2, gs=[]; let cur=[];
+  for(const w of kws){ if(cur.length){ const gap=w.a-cur[cur.length-1].b, ln=cur.map(x=>x.t).join(' ').length; if(gap>0.7||ln+1+w.t.length>mx||('.?!'.includes(cur[cur.length-1].t.slice(-1))&&ln>=24&&gap>0.15)){ gs.push(cur); cur=[]; } } cur.push(w); }
+  if(cur.length) gs.push(cur);
+  CC.blocks=gs.map((g,i)=>({a:g[0].a,b:Math.max(Math.min(g[g.length-1].b+0.35, i+1<gs.length?gs[i+1][0].a-0.02:1e9), g[0].a+0.2),words:g})); CC.bi=0; return CC.blocks; }
+// paint the caption for master time t onto a preview canvas: wrapped lines, outline or dark box, per-word colours
+function drawCaption(cx,canvas,t){ const bl=ccBlocks(); if(!bl.length) return; let i=Math.min(CC.bi,bl.length-1); while(i>0&&t<bl[i].a) i--; while(i<bl.length-1&&t>bl[i].b) i++; CC.bi=i; const b=bl[i]; if(t<b.a||t>b.b) return;
+  const px=Math.max(10,canvas.height*(+CC.doc.sizePct||4.5)/100); cx.save(); cx.font=`bold ${px}px 'DejaVu Sans','Arial',sans-serif`; cx.textBaseline='alphabetic';
+  const maxW=canvas.width*0.9, spw=cx.measureText(' ').width, lines=[[]]; let lw=0;
+  for(const w of b.words){ const ww=cx.measureText(w.t).width; if(lw>0&&lw+spw+ww>maxW){ lines.push([]); lw=0; } lines[lines.length-1].push({...w,ww}); lw+=(lw?spw:0)+ww; }
+  const lh=px*1.28, y0=CC.doc.position==='top'?px*1.25:canvas.height-canvas.height*0.05-(lines.length-1)*lh;
+  lines.forEach((ln,li)=>{ const tw=ln.reduce((s,w)=>s+w.ww,0)+spw*(ln.length-1); let x=(canvas.width-tw)/2; const y=y0+li*lh;
+    if(CC.doc.bg){ cx.fillStyle='rgba(0,0,0,.55)'; cx.fillRect(x-px*0.3,y-px*1.02,tw+px*0.6,lh); }
+    for(const w of ln){ if(CC.doc.outline&&!CC.doc.bg){ cx.strokeStyle='#000'; cx.lineWidth=Math.max(2,px/9); cx.lineJoin='round'; cx.strokeText(w.t,x,y); } cx.fillStyle=w.color||CC.doc.color||'#fff'; cx.fillText(w.t,x,y); x+=w.ww+spw; } });
+  cx.restore(); }
+// any tighten edit changes which words are kept -> rebuild the caption preview blocks
+{ const _tChanged=tChanged; tChanged=function(){ CC.blocks=null; return _tChanged.apply(this,arguments); }; }
+loadCaptions();
 const AI_PRESETS={xai:['https://api.x.ai/v1','grok-4-fast','xai'],openai:['https://api.openai.com/v1','gpt-4o-mini','openai'],ollama:['http://localhost:11434/v1','llama3.1','openai'],anthropic:['https://api.anthropic.com','claude-sonnet-5','anthropic']};
 // fetches /api/ai and shows the configured provider/model/key state in #aiState, #pAiState and the #aiShort button; disables #pLLM when no assistant is available
 async function loadAi(){ try{ const a=await (await fetch('/api/ai')).json(); $('#aiProv').value=a.configured||'auto'; if(!$('#aiUrl').value) $('#aiUrl').value=a.base_url||''; if(!$('#aiModel').value) $('#aiModel').value=a.model||''; const txt=(a.available?'✓ ':'· ')+a.detail+(a.has_key?` · key ${a.key_hint}`:''); $('#aiState').textContent=txt; $('#pAiState').textContent=a.available?`(${a.detail.split(',')[0]})`:'(no AI set up — keyword names)'; $('#pLLM').disabled=!a.available; $('#aiShort').textContent=a.available?a.detail.split(',')[0].split(' at ')[0]:'none — set up'; }catch(e){} }
